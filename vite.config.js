@@ -1,4 +1,5 @@
 import { defineConfig, transformWithEsbuild } from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -71,7 +72,31 @@ function beingcampLegacy() {
 
 export default defineConfig({
   base: './',
-  plugins: [beingcampLegacy()],
+  plugins: [
+    beingcampLegacy(),
+    // Installable, offline-capable web app. We keep the hand-written
+    // public/manifest.webmanifest (linked from index.html) as the manifest.
+    VitePWA({
+      registerType: 'autoUpdate',
+      injectRegister: 'auto',
+      manifest: false,
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,svg,webmanifest}'],
+        navigateFallback: 'index.html',
+        runtimeCaching: [
+          {
+            // Google Fonts stylesheets + font files
+            urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'google-fonts',
+              expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 365 },
+            },
+          },
+        ],
+      },
+    }),
+  ],
   esbuild: {
     // Classic JSX runtime to match the original app's React.createElement semantics.
     jsx: 'transform',

@@ -9,7 +9,17 @@ import globals from 'globals';
  * migrated away screen-by-screen). `tsc --noEmit` provides type-level checking.
  */
 export default tseslint.config(
-  { ignores: ['dist/**', 'node_modules/**', 'src/legacy/**', 'supabase/**'] },
+  {
+    ignores: [
+      'dist/**',
+      'node_modules/**',
+      'src/legacy/**',
+      'supabase/**',
+      'android/**',
+      'ios/**',
+      'dev-dist/**',
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

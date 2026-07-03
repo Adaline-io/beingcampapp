@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">BeingCamp</string>
+    <string name="title_activity_main">BeingCamp</string>
+    <string name="package_name">com.adaline.beingcamp</string>
+    <string name="custom_url_scheme">com.adaline.beingcamp</string>
+</resources>

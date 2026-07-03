@@ -131,3 +131,19 @@ button.tap:active {
     padding: 0;
   }
 }
+
+/* Real device (native shell, installed PWA, phone browser): the app is the screen.
+   Fixed inset + dvh handles mobile browser chrome. The design already reserves
+   52px at the top (status-bar zone) and 26px under the tab bar (home indicator),
+   so only pad by the *shortfall* when the real safe-area is bigger than that. */
+.app-fullbleed {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  background: var(--bg);
+  padding-top: max(0px, calc(env(safe-area-inset-top, 0px) - 52px));
+  padding-bottom: max(0px, calc(env(safe-area-inset-bottom, 0px) - 26px));
+  overflow: hidden;
+}
