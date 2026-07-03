@@ -36,6 +36,19 @@ export async function verifyEmailOtp(email: string, token: string): Promise<Sess
   return data.session;
 }
 
+/**
+ * Anonymous sign-in — creates a real auth user + database rows with zero
+ * provider setup (enable "Anonymous sign-ins" in Supabase → Auth → Providers).
+ * The MVP onboarding uses this; swap to sendPhoneOtp/verifyPhoneOtp once an
+ * SMS provider (Twilio etc.) is configured on the project.
+ */
+export async function signInAnonymously(): Promise<Session | null> {
+  const sb = requireSupabase();
+  const { data, error } = await sb.auth.signInAnonymously();
+  if (error) throw error;
+  return data.session;
+}
+
 export async function signOut(): Promise<void> {
   if (!supabase) return;
   await supabase.auth.signOut();

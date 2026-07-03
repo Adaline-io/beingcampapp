@@ -1,6 +1,13 @@
 // BeingCamp — App controller: state, navigation, economy actions
 
 function useBeingCamp(t) {
+  // Supabase bridge (src/services/bridge.ts) — present + enabled only when the
+  // backend env keys are configured; null in local/demo mode. Mirror calls are
+  // fire-and-forget so a flaky network never blocks the UI.
+  const BE = (typeof window !== 'undefined' && window.BeingCampBackend && window.BeingCampBackend.enabled)
+    ? window.BeingCampBackend : null;
+  const mirror = (promise) => { if (promise && promise.catch) promise.catch((e) => console.warn('[beingcamp] backend sync failed:', e)); };
+
   const fresh = !!t.newMember;
   const PKEY = fresh ? 'beingcamp_new' : 'beingcamp_v3';
   const loadState = () => { try { return JSON.parse(localStorage.getItem(PKEY)) || {}; } catch (e) { return {}; } };
@@ -28,6 +35,25 @@ function useBeingCamp(t) {
     localStorage.setItem(PKEY, JSON.stringify({ entered, balance, activityCoins, txns, appliedWork, orders, workspaces, publications, notifs, attending, programs, profile }));
   }, [entered, balance, activityCoins, txns, appliedWork, orders, workspaces, publications, notifs, attending, programs, profile]);
 
+  // Live mode: restore the Supabase session and hydrate from the database.
+  // Server state wins for identity + wallet; demo content fills the rest until
+  // those screens are migrated. No session (or any failure) → start local.
+  React.useEffect(() => {
+    if (!BE) return;
+    let alive = true;
+    BE.boot().then((b) => {
+      if (!alive || !b) return;
+      if (b.profile) setProfile(b.profile);
+      setBalance(b.balance);
+      setActivityCoins(b.activityCoins);
+      if (b.txns.length) setTxns(b.txns);
+      if (b.orders.length) setOrders(b.orders);
+      setEntered(true);
+    }).catch((e) => console.warn('[beingcamp] backend boot failed:', e));
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const initialsOf = (name) => (name || 'You').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || 'YOU';
   const p = profile || DEFAULT_PROFILE;
 
@@ -39,7 +65,7 @@ function useBeingCamp(t) {
   const S = {
     user: { name: p.name, initials: initialsOf(p.name), accent: p.accent || '#c9a84c' },
     profile: p,
-    updateProfile: (patch) => setProfile((prev) => ({ ...(prev || DEFAULT_PROFILE), ...patch })),
+    updateProfile: (patch) => { setProfile((prev) => ({ ...(prev || DEFAULT_PROFILE), ...patch })); if (BE) mirror(BE.syncProfile(patch)); },
     greeting: (() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; })(),
     loyalty: 'Loyal',
     entered, tab, sheet, balance, activityCoins, txns, appliedWork, orders, workspaces, publications, rankIndex,
@@ -61,15 +87,18 @@ function useBeingCamp(t) {
     back: () => setStack((s) => s.slice(0, -1)),
     openSheet: (name, payload = {}) => setSheet({ name, payload }),
     closeSheet: () => setSheet({ name: null, payload: {} }),
-    spend: (amt, label, ref) => { setBalance((b) => b - amt); pushTxn(label, -amt, ref); toast({ msg: label, coin: -amt }); },
-    earn: (amt, label, ref) => { setBalance((b) => b + amt); setActivityCoins((a) => a + amt); pushTxn(label, amt, ref); toast({ msg: label, coin: amt }); },
-    buyPack: (pack) => { const total = pack.coins + pack.bonus; setBalance((b) => b + total); pushTxn(`${pack.name}${pack.bonus ? ` · +${pack.bonus} bonus` : ''}`, total, 'pack'); },
+    spend: (amt, label, ref) => { setBalance((b) => b - amt); pushTxn(label, -amt, ref); toast({ msg: label, coin: -amt }); if (BE) mirror(BE.syncTransaction(label, -amt, ref)); },
+    earn: (amt, label, ref) => { setBalance((b) => b + amt); setActivityCoins((a) => a + amt); pushTxn(label, amt, ref); toast({ msg: label, coin: amt }); if (BE) mirror(BE.syncTransaction(label, amt, ref)); },
+    buyPack: (pack) => { const total = pack.coins + pack.bonus; const label = `${pack.name}${pack.bonus ? ` · +${pack.bonus} bonus` : ''}`; setBalance((b) => b + total); pushTxn(label, total, 'pack'); if (BE) mirror(BE.syncTransaction(label, total, 'pack')); },
     applyWork: (id) => setAppliedWork((p) => p.includes(id) ? p : [...p, id]),
-    addOrder: (product) => setOrders((p) => [{
-      id: '#BC-' + (2042 + p.length), item: product.name, source: product.source, bc: product.bc,
-      tone: product.tone, type: product.type === 'physical' ? 'physical' : 'pass', stage: product.type === 'physical' ? 0 : 4,
-      when: 'Just now', eta: product.type === 'physical' ? 'Arrives in 3–5 days' : 'Ready to use',
-    }, ...p]),
+    addOrder: (product) => {
+      setOrders((p) => [{
+        id: '#BC-' + (2042 + p.length), item: product.name, source: product.source, bc: product.bc,
+        tone: product.tone, type: product.type === 'physical' ? 'physical' : 'pass', stage: product.type === 'physical' ? 0 : 4,
+        when: 'Just now', eta: product.type === 'physical' ? 'Arrives in 3–5 days' : 'Ready to use',
+      }, ...p]);
+      if (BE) mirror(BE.syncOrder({ item: product.name, source: product.source, bc: product.bc, tone: product.tone, type: product.type === 'physical' ? 'physical' : 'pass', stage: product.type === 'physical' ? 0 : 4 }));
+    },
     addPostedWork: ({ cat, budget }) => setWorkspaces((p) => [{
       id: 'w' + Date.now(), title: 'Your new ' + cat.toLowerCase() + ' project', poster: 'You', cat,
       you: 'poster', role: 'Poster', stage: 1, budget, escrowReleased: 0, deadline: 'Confirm team',
@@ -90,8 +119,8 @@ function useBeingCamp(t) {
       tags: [type === 'Theory' ? 'Essay' : 'New'], claps: 0, read: type === 'Work' ? 'Gallery' : '2 min',
       excerpt: 'Just published to the Showcase.', project: !!project, mine: true,
     }, ...p]),
-    enter: (newProfile) => { if (newProfile) setProfile(newProfile); setEntered(true); setTab('home'); },
-    signOut: () => { setEntered(false); setStack([]); setTab('home'); },
+    enter: (newProfile) => { if (newProfile) setProfile(newProfile); setEntered(true); setTab('home'); if (BE) mirror(BE.signIn(newProfile || p, fresh ? 100 : balance)); },
+    signOut: () => { setEntered(false); setStack([]); setTab('home'); if (BE) mirror(BE.signOut()); },
     resetDemo: () => { localStorage.removeItem(PKEY); location.reload(); },
     topScreen: stack.length ? stack[stack.length - 1].screen : null,
     topPayload: stack.length ? stack[stack.length - 1].payload : {},

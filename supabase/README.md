@@ -64,6 +64,19 @@ npx supabase gen types typescript --local > ../src/lib/database.types.ts
 - **Catalog tables** have no INSERT policy — seed/manage them with the service-role
   key (which bypasses RLS), not from the browser.
 
+## Going live
+
+The app is already wired to this backend through `src/services/bridge.ts` —
+onboarding creates a real auth user + profile row, and wallet actions, profile
+edits, and store orders all mirror to the database. To activate it:
+
+1. Set `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` (see `.env.example`).
+2. In the Supabase dashboard: **Auth → Providers → enable "Anonymous sign-ins"**
+   — MVP onboarding signs in anonymously (no SMS provider needed). When you add
+   an SMS provider (Twilio etc.), swap the bridge to `sendPhoneOtp`/`verifyPhoneOtp`
+   from `src/services/auth.ts`; the OTP screens already model that flow.
+3. `npx supabase db push` (or `db reset` locally) to apply migrations + seed.
+
 ## Next steps (production hardening)
 
 - Move `recordTransaction` (balance update + ledger insert) into a **Postgres RPC /
