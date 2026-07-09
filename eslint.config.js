@@ -39,4 +39,16 @@ export default tseslint.config(
       'react/jsx-uses-vars': 'error',
     },
   },
+  {
+    // Playwright E2E specs: browser globals inside page callbacks, node for the runner.
+    files: ['tests/**/*.mjs', 'playwright.config.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: { ...globals.browser, ...globals.node },
+    },
+    rules: {
+      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', caughtErrors: 'none' }],
+    },
+  },
 );

@@ -44,3 +44,8 @@ ios/App/App/public/
 ios/App/App/capacitor.config.json
 ios/App/Podfile.lock
 ios/App/Pods/
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/

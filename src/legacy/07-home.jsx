@@ -24,7 +24,7 @@ function TopBar({ S }) {
         </div>
       </div>
       <WalletChip S={S} />
-      <button className="tap" onClick={() => S.go('notifications')} style={{ width: 42, height: 42, borderRadius: 13, background: 'var(--surface)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, position: 'relative' }}>
+      <button className="tap" aria-label="Notifications" onClick={() => S.go('notifications')} style={{ width: 42, height: 42, borderRadius: 13, background: 'var(--surface)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, position: 'relative' }}>
         <Icon name="bell" size={19} color="var(--muted)" />
         {S.unreadCount > 0 && <span style={{ position: 'absolute', top: 6, right: 6, minWidth: 16, height: 16, padding: '0 4px', borderRadius: 999, background: 'var(--gold)', border: '1.5px solid var(--surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Space Mono, monospace', fontSize: 9, fontWeight: 700, color: '#1a1407' }}>{S.unreadCount}</span>}
       </button>

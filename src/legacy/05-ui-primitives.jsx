@@ -145,7 +145,7 @@ function Btn({ children, onClick, variant = 'primary', full = false, size = 'md'
     danger:  { background: 'rgba(210,86,79,0.12)', color: 'var(--red)', borderColor: 'rgba(210,86,79,0.3)' },
   };
   return (
-    <button className="tap" onClick={disabled ? undefined : onClick} style={{ ...base, ...variants[variant], ...style }}>
+    <button className="tap" disabled={disabled} onClick={disabled ? undefined : onClick} style={{ ...base, ...variants[variant], ...style }}>
       {icon && <Icon name={icon} size={fs + 3} stroke={2.2} />}
       {children}
     </button>
@@ -233,7 +233,7 @@ function ScreenHead({ title, sub, onBack, right, balance }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 0 18px' }}>
       {onBack && (
-        <button className="tap" onClick={onBack} style={{ width: 38, height: 38, borderRadius: 12, background: 'var(--surface)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+        <button className="tap" aria-label="Back" onClick={onBack} style={{ width: 38, height: 38, borderRadius: 12, background: 'var(--surface)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
           <Icon name="back" size={19} color="var(--text)" />
         </button>
       )}
