@@ -237,6 +237,95 @@ function DesktopHome({ S }) {
   );
 }
 
+// ── Desktop Showcase: publications as a wide gallery grid ───────────────
+function DesktopShowcase({ S }) {
+  const pubs = S.publications || [];
+  return (
+    <div style={{ animation: 'screenIn .3s ease' }}>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20 }}>
+        <div>
+          <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 34, color: 'var(--text)', lineHeight: 1 }}>SHOWCASE</div>
+          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Case studies, work & theory from the Camp</div>
+        </div>
+        <div style={{ marginLeft: 'auto' }}>
+          <Btn variant="primary" icon="plus" onClick={() => S.openSheet('publish')}>Publish</Btn>
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 14 }}>
+        {pubs.map((p) => (
+          <DeskCard key={p.id} onClick={() => { S.setTab('showcase'); S.go('pubDetail', { id: p.id }); }} style={{ padding: 0, overflow: 'hidden' }}>
+            <Placeholder tone={p.tone} h={120} radius={0} icon={p.type === 'Work' ? 'spark' : 'pool'} />
+            <div style={{ padding: '14px 16px 16px' }}>
+              <Badge tone={p.type === 'Case Study' ? 'gold' : p.type === 'Work' ? 'blue' : 'purple'}>{p.type}</Badge>
+              <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 14.5, color: 'var(--text)', margin: '10px 0 6px', lineHeight: 1.3 }}>{p.title}</div>
+              <div style={{ display: 'flex', fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'var(--dim)' }}>
+                <span>{p.author}</span>
+                <span style={{ marginLeft: 'auto' }}>{p.read}</span>
+              </div>
+            </div>
+          </DeskCard>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Desktop Projects: workspace grid + open work table ──────────────────
+function DesktopProjects({ S }) {
+  const mine = S.workspaces || [];
+  const open = S.openWork || [];
+  return (
+    <div style={{ animation: 'screenIn .3s ease' }}>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20 }}>
+        <div>
+          <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 34, color: 'var(--text)', lineHeight: 1 }}>PROJECTS</div>
+          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Your workspaces and open work in the Pool</div>
+        </div>
+        <div style={{ marginLeft: 'auto' }}>
+          <Btn variant="primary" icon="plus" onClick={() => S.openSheet('postWork')}>Post work</Btn>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}>
+        {mine.map((w) => {
+          const released = w.milestones ? w.milestones.filter((m) => m.status === 'done').length : 0;
+          return (
+            <DeskCard key={w.id} onClick={() => { S.setTab('projects'); S.go('workspace', { id: w.id }); }}>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                <Badge tone={w.you === 'poster' ? 'blue' : 'gold'}>{w.you === 'poster' ? 'You posted' : w.role}</Badge>
+                <Badge>{STAGES[w.stage]}</Badge>
+              </div>
+              <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 15.5, color: 'var(--text)', lineHeight: 1.3 }}>{w.title}</div>
+              <div style={{ margin: '12px 0 6px' }}><Progress value={w.escrowReleased} max={w.budget} h={5} /></div>
+              <div style={{ display: 'flex', fontFamily: 'Space Mono, monospace', fontSize: 10.5, color: 'var(--dim)' }}>
+                <span>{released}/{w.milestones ? w.milestones.length : 0} milestones</span>
+                <span style={{ marginLeft: 'auto', color: 'var(--green)' }}>{fmt(w.escrowReleased)} / {fmt(w.budget)} BC</span>
+              </div>
+            </DeskCard>
+          );
+        })}
+      </div>
+
+      <DeskSectionHead label="Open in the Pool" />
+      <DeskCard style={{ padding: '4px 20px' }}>
+        {open.map((o, i) => {
+          const applied = (S.appliedWork || []).includes(o.id);
+          return (
+            <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 0', borderBottom: i < open.length - 1 ? '1px solid var(--line)' : 'none' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>{o.title}</div>
+                <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10.5, color: 'var(--dim)', marginTop: 3 }}>{o.poster} · {o.cat} · {o.need}</div>
+              </div>
+              <BC amount={o.pay} size={14} color="var(--gold)" />
+              <Btn variant={applied ? 'ghost' : 'outline'} size="sm" onClick={() => !applied && S.openSheet('applyWork', { work: o })}>{applied ? 'Applied' : 'Apply'}</Btn>
+            </div>
+          );
+        })}
+      </DeskCard>
+    </div>
+  );
+}
+
 // ── Right rail: live context beside every non-home screen ──────────────
 function DesktopRail({ S }) {
   const notifs = (S.notifs || []).filter((n) => n.unread).slice(0, 3);
@@ -293,16 +382,17 @@ function BeingCampDesktop({ t }) {
     );
   }
 
-  const isHome = S.tab === 'home' && !S.topScreen;
+  // Tabs with a desktop-native wide view; sub-screens fall back to the column.
+  const wideViews = { home: DesktopHome, showcase: DesktopShowcase, projects: DesktopProjects };
+  const WideView = !S.topScreen ? wideViews[S.tab] : null;
 
   return (
     <div className="app-desktop">
       <DesktopSidebar S={S} />
       <main ref={scrollRef} key={S.tab + (S.topScreen || '')} style={{ flex: 1, height: '100%', overflowY: 'auto' }}>
-        {isHome ? (
-          // Home gets a desktop-native dashboard that uses the width.
+        {WideView ? (
           <div style={{ maxWidth: 980, margin: '0 auto', padding: '34px 34px 90px' }}>
-            <DesktopHome S={S} />
+            <WideView S={S} />
           </div>
         ) : (
           // Other screens: content column + live context rail.

@@ -53,6 +53,12 @@ body {
     transform 0.12s ease,
     filter 0.15s ease;
 }
+/* Desktop pointers get a hover cue; touch devices are unaffected. */
+@media (hover: hover) and (pointer: fine) {
+  .tap:hover {
+    filter: brightness(1.12);
+  }
+}
 .tap:active {
   transform: scale(0.97);
   filter: brightness(1.06);

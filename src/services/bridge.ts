@@ -255,13 +255,46 @@ export const backend = {
     }
   },
 
-  /** Create the auth user + profile row when onboarding completes. */
+  /**
+   * Create the auth user + profile row when onboarding completes.
+   *
+   * Method chain — whichever the project's auth settings allow first wins:
+   *  1. anonymous sign-in (needs "Allow anonymous sign-ins")
+   *  2. device account: generated email+password kept in localStorage
+   *     (needs "Confirm email" off; created once, signed back into after that)
+   */
   async signIn(profile: Partial<UiProfile>, startingBalance = 100): Promise<void> {
     if (!isBackendEnabled) return;
     let userId = await currentUserId();
     if (!userId) {
-      const session = await auth.signInAnonymously();
-      userId = session?.user?.id ?? null;
+      try {
+        const session = await auth.signInAnonymously();
+        userId = session?.user?.id ?? null;
+      } catch (anonErr) {
+        console.warn('[beingcamp] anonymous sign-in unavailable, trying device account:', anonErr);
+        const CREDS_KEY = 'beingcamp_device_account';
+        let creds: { email: string; password: string } | null = null;
+        try {
+          creds = JSON.parse(localStorage.getItem(CREDS_KEY) ?? 'null');
+        } catch {
+          creds = null;
+        }
+        if (!creds) {
+          creds = {
+            email: `member-${crypto.randomUUID()}@members.beingcamp.app`,
+            password: crypto.randomUUID() + crypto.randomUUID(),
+          };
+        }
+        let session = await auth.signInWithPassword(creds.email, creds.password).catch(() => null);
+        if (!session) session = await auth.signUpWithPassword(creds.email, creds.password);
+        if (!session) {
+          throw new Error(
+            'sign-up needs email confirmation — disable "Confirm email" or enable anonymous sign-ins in Supabase Auth settings'
+          );
+        }
+        localStorage.setItem(CREDS_KEY, JSON.stringify(creds));
+        userId = session.user?.id ?? null;
+      }
     }
     if (!userId) throw new Error('sign-in produced no session');
 

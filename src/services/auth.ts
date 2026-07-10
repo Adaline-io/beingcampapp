@@ -49,6 +49,26 @@ export async function signInAnonymously(): Promise<Session | null> {
   return data.session;
 }
 
+/** Password sign-in for the device-account fallback (see bridge.signIn). */
+export async function signInWithPassword(email: string, password: string): Promise<Session | null> {
+  const sb = requireSupabase();
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+  return data.session;
+}
+
+/**
+ * Password sign-up for the device-account fallback. Returns a session only
+ * when the project auto-confirms emails ("Confirm email" off); otherwise the
+ * account exists but can't act yet.
+ */
+export async function signUpWithPassword(email: string, password: string): Promise<Session | null> {
+  const sb = requireSupabase();
+  const { data, error } = await sb.auth.signUp({ email, password });
+  if (error) throw error;
+  return data.session;
+}
+
 export async function signOut(): Promise<void> {
   if (!supabase) return;
   await supabase.auth.signOut();
