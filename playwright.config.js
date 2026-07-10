@@ -23,7 +23,10 @@ export default defineConfig({
     launchOptions: { executablePath },
   },
   webServer: {
-    command: 'npm run build && npm run preview -- --port 4173 --strictPort',
+    // VITE_FORCE_LOCAL keeps the test build in demo mode so E2E runs (locally
+    // and in CI) never create users or rows in the production database.
+    command:
+      'VITE_FORCE_LOCAL=1 npm run build && npm run preview -- --port 4173 --strictPort',
     url: 'http://localhost:4173',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
