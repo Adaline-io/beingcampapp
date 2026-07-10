@@ -10,10 +10,11 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 // The same build ships three ways:
 //  · native   — inside the Capacitor iOS/Android shell  → full-bleed app
 //  · phone    — mobile browser / installed PWA          → full-bleed app
-//  · desktop  — web browser                             → centered phone presentation
+//  · desktop  — web browser                             → sidebar desktop shell
+// ?frame keeps the old centered phone presentation (for demos/screenshots).
 // Design/debug tweaks are development chrome: desktop-only, behind ?debug.
 function detectPlatform() {
-  if (typeof window === 'undefined') return { fullBleed: false, debug: false };
+  if (typeof window === 'undefined') return { fullBleed: false, debug: false, frame: false };
   const cap = window.Capacitor;
   const isNative = !!(cap && typeof cap.isNativePlatform === 'function' && cap.isNativePlatform());
   const isStandalone =
@@ -23,8 +24,10 @@ function detectPlatform() {
   const phoneSized = window.innerWidth <= 520;
   const touchPhone = coarse && window.innerWidth <= 820 && window.innerWidth <= window.innerHeight * 1.2;
   const fullBleed = isNative || isStandalone || phoneSized || touchPhone;
-  const debug = !fullBleed && new URLSearchParams(window.location.search).has('debug');
-  return { fullBleed, debug };
+  const params = new URLSearchParams(window.location.search);
+  const debug = !fullBleed && params.has('debug');
+  const frame = !fullBleed && params.has('frame');
+  return { fullBleed, debug, frame };
 }
 
 function useAccent(accent) {
@@ -56,7 +59,7 @@ function Root() {
   }, []);
 
   React.useEffect(() => {
-    if (platform.fullBleed) return;
+    if (platform.fullBleed || !platform.frame) return;
     const fit = () => {
       const pad = window.innerWidth <= 480 ? 0 : 48;
       const s = Math.min(1, (window.innerHeight - pad) / 874, (window.innerWidth - pad) / 402);
@@ -65,7 +68,7 @@ function Root() {
     fit();
     window.addEventListener('resize', fit);
     return () => window.removeEventListener('resize', fit);
-  }, [platform.fullBleed]);
+  }, [platform.fullBleed, platform.frame]);
 
   const app = <BeingCampApp t={t} key={`${t.rankIndex}-${t.newMember}`} />;
 
@@ -74,7 +77,32 @@ function Root() {
     return <div className="app-fullbleed">{app}</div>;
   }
 
-  // Desktop web: centered phone presentation (frame optional via ?debug tweaks).
+  // Desktop web: sidebar shell (the ?frame presentation is handled below).
+  if (!platform.frame) {
+    return (
+      <>
+        <BeingCampDesktop t={t} key={`desk-${t.rankIndex}-${t.newMember}`} />
+        {platform.debug && (
+          <TweaksPanel>
+            <TweakSection label="Brand" />
+            <TweakColor label="Accent" value={t.accent}
+              options={['#c9a84c', '#d98a3d', '#5b9bd6', '#7bbf6a', '#c77b9e']}
+              onChange={(v) => setTweak('accent', v)} />
+            <TweakSection label="Demo state" />
+            <TweakToggle label="New member (empty start)" value={t.newMember}
+              onChange={(v) => setTweak('newMember', v)} />
+            <TweakRadio label="Your rank" value={String(t.rankIndex)}
+              options={['0', '1', '2', '3', '4']}
+              onChange={(v) => setTweak('rankIndex', parseInt(v))} />
+            <TweakSection label="Demo data" />
+            <TweakButton label="Reset demo data" onClick={() => { localStorage.removeItem('beingcamp_v3'); location.reload(); }} />
+          </TweaksPanel>
+        )}
+      </>
+    );
+  }
+
+  // ?frame: centered phone presentation for demos and screenshots.
   const device = t.showFrame
     ? <IOSDevice dark={true}>{app}</IOSDevice>
     : <div style={{ width: 402, height: 844, borderRadius: 22, overflow: 'hidden', boxShadow: '0 30px 80px rgba(0,0,0,0.5)', background: 'var(--bg)' }}>{app}</div>;

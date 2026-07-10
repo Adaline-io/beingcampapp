@@ -132,6 +132,28 @@ button.tap:active {
   }
 }
 
+/* Desktop shell: sidebar + content column filling the window. */
+.app-desktop {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+}
+/* Bottom sheets escape the shell and center as a column over the viewport. */
+.app-desktop-sheets > div {
+  position: fixed !important;
+}
+.app-desktop-sheets > div > div:last-child {
+  max-width: 480px;
+  width: 100%;
+  margin: 0 auto;
+  border-radius: 26px 26px 0 0;
+}
+/* Toasts pin to the viewport, not the content column. */
+.app-desktop-toast > div {
+  position: fixed !important;
+}
+
 /* Real device (native shell, installed PWA, phone browser): the app is the screen.
    Fixed inset + dvh handles mobile browser chrome. The design already reserves
    52px at the top (status-bar zone) and 26px under the tab bar (home indicator),
