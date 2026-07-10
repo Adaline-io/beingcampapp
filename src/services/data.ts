@@ -114,49 +114,20 @@ export async function getTransactions(profileId: string) {
 }
 
 /**
- * Adjust a member's balance and write a ledger row.
- *
- * NOTE: For production this belongs in a Postgres RPC / edge function so the
- * balance update and the ledger insert are atomic and server-authoritative.
- * See supabase/README.md → "Next steps". This client version is fine for the MVP.
+ * Adjust the signed-in member's balance and write a ledger row — atomically,
+ * on the server, via the `record_transaction` RPC (0003 migration). The profile
+ * row is locked during the update and overdrafts raise, so a racing or tampered
+ * client can never desync a balance.
  */
-export async function recordTransaction(input: {
-  profileId: string;
-  label: string;
-  amount: number;
-  ref: string;
-}) {
+export async function recordTransaction(input: { label: string; amount: number; ref: string }) {
   const sb = requireSupabase();
-  const { data: profile, error: pErr } = await sb
-    .from('profiles')
-    .select('balance, activity_coins')
-    .eq('id', input.profileId)
-    .single();
-  if (pErr) throw pErr;
-
-  const balance = Number((profile as { balance?: number }).balance ?? 0) + input.amount;
-  const activity =
-    Number((profile as { activity_coins?: number }).activity_coins ?? 0) +
-    (input.amount > 0 ? input.amount : 0);
-
-  const { error: uErr } = await sb
-    .from('profiles')
-    .update({ balance, activity_coins: activity })
-    .eq('id', input.profileId);
-  if (uErr) throw uErr;
-
-  const { data, error } = await sb
-    .from('transactions')
-    .insert({
-      profile_id: input.profileId,
-      label: input.label,
-      amount: input.amount,
-      ref: input.ref,
-    })
-    .select()
-    .single();
+  const { data, error } = await sb.rpc('record_transaction', {
+    p_label: input.label,
+    p_amount: Math.round(input.amount),
+    p_ref: input.ref,
+  });
   if (error) throw error;
-  return { transaction: data, balance };
+  return data as { transaction_id: string; balance: number; activity_coins: number };
 }
 
 /* --------------------------- Orders & activity ---------------------------- */

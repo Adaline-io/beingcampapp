@@ -204,7 +204,7 @@ export const backend = {
     if (!isBackendEnabled) return;
     const userId = await currentUserId();
     if (!userId) return;
-    await data.recordTransaction({ profileId: userId, label, amount, ref: safeRef(ref) });
+    await data.recordTransaction({ label, amount, ref: safeRef(ref) });
   },
 
   /** Mirror a profile edit. */
