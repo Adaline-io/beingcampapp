@@ -153,6 +153,22 @@ button.tap:active {
 .app-desktop-toast > div {
   position: fixed !important;
 }
+/* Non-home screens: content column + context rail (rail folds away first). */
+.desk-content {
+  display: flex;
+  gap: 28px;
+  justify-content: center;
+  padding: 30px 30px 90px;
+}
+.desk-rail {
+  width: 300px;
+  flex-shrink: 0;
+}
+@media (max-width: 1180px) {
+  .desk-rail {
+    display: none;
+  }
+}
 
 /* Real device (native shell, installed PWA, phone browser): the app is the screen.
    Fixed inset + dvh handles mobile browser chrome. The design already reserves

@@ -101,6 +101,182 @@ function DesktopSidebar({ S }) {
   );
 }
 
+// ── Desktop-native Home: a real dashboard that uses the width ──────────
+function DeskCard({ children, style, onClick, hl }) {
+  return (
+    <div className={onClick ? 'tap' : ''} onClick={onClick} style={{
+      background: hl
+        ? 'radial-gradient(120% 180% at 10% 0%, var(--gold-dim), rgba(201,168,76,0.02) 60%), var(--surface)'
+        : 'var(--surface)',
+      border: '1px solid ' + (hl ? 'var(--gold-line)' : 'var(--line)'),
+      borderRadius: 18, padding: 20, cursor: onClick ? 'pointer' : 'default', ...style,
+    }}>{children}</div>
+  );
+}
+
+function DeskSectionHead({ label, action, onAction }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', margin: '26px 0 12px' }}>
+      <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--dim)' }}>{label}</span>
+      {action && <button className="tap" onClick={onAction} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 12.5, color: 'var(--gold)' }}>{action} →</button>}
+    </div>
+  );
+}
+
+function DesktopHome({ S }) {
+  const rank = RANK_PERKS[S.rankIndex];
+  const next = RANK_PERKS[Math.min(4, S.rankIndex + 1)];
+  const projects = (S.workspaces || []).slice(0, 4);
+  const briefs = (S.openWork || []).slice(0, 3);
+  const recent = (S.txns || []).slice(0, 5);
+
+  return (
+    <div style={{ animation: 'screenIn .3s ease' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 18 }}>
+        <span style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 14, color: 'var(--muted)' }}>{S.greeting},</span>
+        <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 30, color: 'var(--text)', lineHeight: 1 }}>{S.user.name}</span>
+        <Badge tone="gold">{rank.name}</Badge>
+      </div>
+
+      {/* Hero row: wallet + camp today */}
+      <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 14 }}>
+        <DeskCard hl>
+          <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--gold)' }}>BeingCoin balance</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, margin: '10px 0 4px' }}>
+            <CoinMark size={44} glow />
+            <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 58, color: 'var(--text)', lineHeight: 0.95 }}>{fmt(S.balance)}</span>
+            <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+              <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--dim)' }}>Earn</div>
+              <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 24, color: 'var(--gold)' }}>{rank.earn}</div>
+            </div>
+          </div>
+          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12.5, color: 'var(--muted)', margin: '8px 0 10px' }}>
+            {fmt(S.activityCoins)} activity BC · {S.rankIndex < 4 ? `next rank: ${next.name}` : 'top rank reached'}
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+            <Btn variant="primary" icon="plus" onClick={() => { S.setTab('home'); S.go('wallet'); S.go('buy'); }}>Buy coins</Btn>
+            <Btn variant="ghost" icon="wallet" onClick={() => { S.setTab('home'); S.go('wallet'); }}>Wallet</Btn>
+          </div>
+        </DeskCard>
+
+        <DeskCard>
+          <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 12 }}>Camp today</div>
+          {[
+            { ic: 'bell', tone: 'var(--gold)', label: S.unreadCount ? `${S.unreadCount} unread notification${S.unreadCount > 1 ? 's' : ''}` : 'All caught up', go: () => { S.setTab('home'); S.go('notifications'); } },
+            { ic: 'scan', tone: 'var(--green)', label: 'Check in to a zone', go: () => { S.setTab('home'); S.go('scan'); } },
+            { ic: 'calendar', tone: 'var(--blue)', label: `${(S.programs || []).length} programs coming up`, go: () => { S.setTab('home'); S.go('programs'); } },
+          ].map((r) => (
+            <button key={r.label} className="tap" onClick={r.go} style={{ display: 'flex', alignItems: 'center', gap: 11, width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', padding: '9px 2px', borderBottom: '1px solid var(--line)' }}>
+              <Icon name={r.ic} size={17} color={r.tone} />
+              <span style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13.5, color: 'var(--text)' }}>{r.label}</span>
+              <Icon name="arrowR" size={14} color="var(--dim)" style={{ marginLeft: 'auto' }} />
+            </button>
+          ))}
+        </DeskCard>
+      </div>
+
+      {/* Projects */}
+      <DeskSectionHead label="Your projects" action="All" onAction={() => S.setTab('projects')} />
+      {projects.length === 0 ? (
+        <DeskCard onClick={() => S.openSheet('postWork')}>
+          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 14.5, color: 'var(--text)' }}>No projects yet</div>
+          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Post work or apply in the Pool to start your first one.</div>
+        </DeskCard>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          {projects.map((w) => {
+            const released = w.milestones ? w.milestones.filter((m) => m.status === 'done').length : 0;
+            return (
+              <DeskCard key={w.id} onClick={() => { S.setTab('projects'); S.go('workspace', { id: w.id }); }}>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                  <Badge tone={w.you === 'poster' ? 'blue' : 'gold'}>{w.you === 'poster' ? 'You posted' : w.role}</Badge>
+                  <Badge>{STAGES[w.stage]}</Badge>
+                </div>
+                <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 15.5, color: 'var(--text)', lineHeight: 1.3 }}>{w.title}</div>
+                <div style={{ margin: '12px 0 6px' }}><Progress value={w.escrowReleased} max={w.budget} h={5} /></div>
+                <div style={{ display: 'flex', fontFamily: 'Space Mono, monospace', fontSize: 10.5, color: 'var(--dim)' }}>
+                  <span>{released}/{w.milestones ? w.milestones.length : 0} milestones</span>
+                  <span style={{ marginLeft: 'auto', color: 'var(--green)' }}>{fmt(w.escrowReleased)} / {fmt(w.budget)} BC</span>
+                </div>
+              </DeskCard>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Open work + recent activity */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <div>
+          <DeskSectionHead label="Open in the Pool" action="Find work" onAction={() => { S.setTab('projects'); S.go('findwork'); }} />
+          <DeskCard style={{ padding: '6px 20px' }}>
+            {briefs.map((o, i) => (
+              <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 0', borderBottom: i < briefs.length - 1 ? '1px solid var(--line)' : 'none' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 13.5, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o.title}</div>
+                  <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'var(--dim)', marginTop: 2 }}>{o.poster} · {o.cat}</div>
+                </div>
+                <BC amount={o.pay} size={13} color="var(--gold)" />
+              </div>
+            ))}
+          </DeskCard>
+        </div>
+        <div>
+          <DeskSectionHead label="Recent activity" action="Wallet" onAction={() => { S.setTab('home'); S.go('wallet'); }} />
+          <DeskCard style={{ padding: '6px 20px' }}>
+            {recent.map((x, i) => (
+              <div key={x.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0', borderBottom: i < recent.length - 1 ? '1px solid var(--line)' : 'none' }}>
+                <Icon name={txIcon(x.ref)} size={15} color={x.amount > 0 ? 'var(--green)' : 'var(--muted)'} />
+                <span style={{ flex: 1, fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{x.label}</span>
+                <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 12, color: x.amount > 0 ? 'var(--green)' : 'var(--muted)' }}>{x.amount > 0 ? '+' : ''}{fmt(x.amount)}</span>
+              </div>
+            ))}
+          </DeskCard>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Right rail: live context beside every non-home screen ──────────────
+function DesktopRail({ S }) {
+  const notifs = (S.notifs || []).filter((n) => n.unread).slice(0, 3);
+  const briefs = (S.openWork || []).slice(0, 3);
+  const programs = (S.programs || []).slice(0, 2);
+  return (
+    <aside className="desk-rail">
+      <DeskCard style={{ marginBottom: 14 }}>
+        <DeskSectionHead label="Notifications" action={notifs.length ? 'All' : null} onAction={() => { S.setTab('home'); S.go('notifications'); }} />
+        {notifs.length === 0 ? (
+          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12.5, color: 'var(--dim)' }}>All caught up.</div>
+        ) : notifs.map((n) => (
+          <div key={n.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--line)' }}>
+            <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 12.5, color: 'var(--text)' }}>{n.title}</div>
+            <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 11.5, color: 'var(--muted)', marginTop: 2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{n.body}</div>
+          </div>
+        ))}
+      </DeskCard>
+      <DeskCard style={{ marginBottom: 14 }}>
+        <DeskSectionHead label="Open work" action="Pool" onAction={() => { S.setTab('projects'); S.go('findwork'); }} />
+        {briefs.map((o) => (
+          <div key={o.id} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '7px 0', borderBottom: '1px solid var(--line)' }}>
+            <span style={{ flex: 1, fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12.5, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{o.title}</span>
+            <BC amount={o.pay} size={12} color="var(--gold)" />
+          </div>
+        ))}
+      </DeskCard>
+      <DeskCard>
+        <DeskSectionHead label="Programs" action="All" onAction={() => { S.setTab('home'); S.go('programs'); }} />
+        {programs.map((w) => (
+          <div key={w.id} style={{ padding: '7px 0', borderBottom: '1px solid var(--line)' }}>
+            <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 12.5, color: 'var(--text)' }}>{w.title}</div>
+            <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'var(--dim)', marginTop: 2 }}>{w.when} · {w.host}</div>
+          </div>
+        ))}
+      </DeskCard>
+    </aside>
+  );
+}
+
 function BeingCampDesktop({ t }) {
   const S = useBeingCamp(t);
   const scrollRef = React.useRef(null);
@@ -117,13 +293,26 @@ function BeingCampDesktop({ t }) {
     );
   }
 
+  const isHome = S.tab === 'home' && !S.topScreen;
+
   return (
     <div className="app-desktop">
       <DesktopSidebar S={S} />
       <main ref={scrollRef} key={S.tab + (S.topScreen || '')} style={{ flex: 1, height: '100%', overflowY: 'auto' }}>
-        <div style={{ maxWidth: 620, margin: '0 auto', padding: '30px 30px 90px' }}>
-          <CurrentScreen S={S} />
-        </div>
+        {isHome ? (
+          // Home gets a desktop-native dashboard that uses the width.
+          <div style={{ maxWidth: 980, margin: '0 auto', padding: '34px 34px 90px' }}>
+            <DesktopHome S={S} />
+          </div>
+        ) : (
+          // Other screens: content column + live context rail.
+          <div className="desk-content">
+            <div style={{ maxWidth: 620, minWidth: 0, flex: 1 }}>
+              <CurrentScreen S={S} />
+            </div>
+            <DesktopRail S={S} />
+          </div>
+        )}
       </main>
       <div className="app-desktop-sheets"><SheetRouter S={S} /></div>
       <div className="app-desktop-toast"><Toast data={S.toastData} /></div>
