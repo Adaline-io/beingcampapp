@@ -59,13 +59,19 @@ function useBeingCamp(t) {
     if (!BE) return;
     let alive = true;
     BE.boot().then((b) => {
-      if (!alive || !b) return;
-      if (b.profile) setProfile(b.profile);
-      setBalance(b.balance);
-      setActivityCoins(b.activityCoins);
-      if (b.txns.length) setTxns(b.txns);
-      if (b.orders.length) setOrders(b.orders);
-      setEntered(true);
+      if (!alive) return;
+      if (b) {
+        if (b.profile) setProfile(b.profile);
+        setBalance(b.balance);
+        setActivityCoins(b.activityCoins);
+        if (b.txns.length) setTxns(b.txns);
+        if (b.orders.length) setOrders(b.orders);
+        setEntered(true);
+      } else if (entered && profile) {
+        // Entered locally but no server account (e.g. sign-ins were disabled
+        // when onboarding ran) — establish one now with the saved identity.
+        mirror(BE.signIn(profile, balance));
+      }
     }).catch((e) => console.warn('[beingcamp] backend boot failed:', e));
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
