@@ -172,6 +172,89 @@ export const backend = {
     }
   },
 
+  /**
+   * Load the public catalog (packs, store, services, open briefs) from the
+   * database, mapped to the shapes the screens render. Needs no session —
+   * these tables are public-read under RLS. Null on any failure → screens
+   * keep their built-in demo catalog.
+   */
+  async loadCatalog(): Promise<Record<string, unknown> | null> {
+    if (!isBackendEnabled) return null;
+    try {
+      const [packs, products, services, briefs] = await Promise.all([
+        data.getCoinPacks(),
+        data.getProducts(),
+        data.getServices(),
+        data.getPoolBriefs(),
+      ]);
+      if (!packs.length && !products.length) return null;
+
+      const uiPacks = (packs as Array<Record<string, unknown>>).map((p, i) => {
+        const coins = Number(p.coins);
+        const bonus = Number(p.bonus ?? 0);
+        const inr = Math.round(Number(p.price_cents) / 100);
+        const per = inr / (coins + bonus);
+        return {
+          id: String(p.id),
+          name: String(p.name),
+          coins,
+          bonus,
+          inr,
+          rate: `₹${per % 1 === 0 ? per : per.toFixed(2)}/BC`,
+          popular: i === 2, // middle-upper pack gets the "Most popular" flag
+        };
+      });
+
+      const uiProducts = (products as Array<Record<string, unknown>>).map((p) => ({
+        id: String(p.id),
+        name: String(p.name),
+        cat: String(p.cat ?? 'Goods'),
+        source: String(p.source),
+        bc: Number(p.bc),
+        type: p.type === 'physical' ? 'physical' : 'pass',
+        stock: 99,
+        tone: String(p.tone ?? '#26201a'),
+        tag: String(p.cat ?? 'New'),
+      }));
+      const storeCats = ['All', ...new Set(uiProducts.map((p) => p.cat))];
+
+      const uiServices = (services as Array<Record<string, unknown>>).map((s) => ({
+        id: String(s.id),
+        name: String(s.name),
+        div: String(s.provider),
+        deposit: Math.max(50, Math.round(Number(s.bc) * 0.25 / 10) * 10),
+        from: Number(s.bc),
+        timeline: String(s.cat ?? 'On scope'),
+        tone: '#262017',
+      }));
+
+      const uiOpenWork = (briefs as Array<Record<string, unknown>>).map((b) => ({
+        id: String(b.id),
+        title: String(b.title),
+        poster: String(b.org),
+        cat: String(b.cat),
+        pay: Number(b.budget),
+        need: `${b.cat} team`,
+        team: 2,
+        deadline: 'Open',
+        minRank: 1,
+        applicants: 0,
+        desc: String(b.summary ?? ''),
+      }));
+
+      return {
+        packs: uiPacks,
+        products: uiProducts,
+        storeCats,
+        services: uiServices,
+        openWork: uiOpenWork,
+      };
+    } catch (err) {
+      console.warn('[beingcamp] catalog load failed, using demo catalog:', err);
+      return null;
+    }
+  },
+
   /** Create the auth user + profile row when onboarding completes. */
   async signIn(profile: Partial<UiProfile>, startingBalance = 100): Promise<void> {
     if (!isBackendEnabled) return;

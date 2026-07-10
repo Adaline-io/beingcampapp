@@ -6,7 +6,12 @@ function useBeingCamp(t) {
   // fire-and-forget so a flaky network never blocks the UI.
   const BE = (typeof window !== 'undefined' && window.BeingCampBackend && window.BeingCampBackend.enabled)
     ? window.BeingCampBackend : null;
-  const mirror = (promise) => { if (promise && promise.catch) promise.catch((e) => console.warn('[beingcamp] backend sync failed:', e)); };
+  const mirror = (promise) => {
+    if (promise && promise.catch) promise.catch((e) => {
+      console.warn('[beingcamp] backend sync failed:', e);
+      toast({ msg: 'Sync failed — saved on this device', icon: 'wallet' });
+    });
+  };
 
   const fresh = !!t.newMember;
   const PKEY = fresh ? 'beingcamp_new' : 'beingcamp_v3';
@@ -28,12 +33,24 @@ function useBeingCamp(t) {
   const [programs, setPrograms] = React.useState(saved.programs ?? (typeof WORKSHOPS !== 'undefined' ? WORKSHOPS.map((w) => ({ ...w })) : []));
   const DEFAULT_PROFILE = { name: 'Aman', accent: '#c9a84c', city: 'Calicut', headline: 'Brand & product designer', bio: 'Building things at the Camp — branding, product, and the occasional film. Open to leading small teams.', skills: ['Branding', 'Motion', 'Web Dev'], path: 'maker', since: "Jun '25" };
   const [profile, setProfile] = React.useState(saved.profile ?? (fresh ? null : DEFAULT_PROFILE));
+  const [catalog, setCatalog] = React.useState(null); // live catalog from the DB (null → demo data)
   const [toastData, setToastData] = React.useState(null);
   const rankIndex = Math.max(0, Math.min(4, t.rankIndex ?? 1));
 
   React.useEffect(() => {
     localStorage.setItem(PKEY, JSON.stringify({ entered, balance, activityCoins, txns, appliedWork, orders, workspaces, publications, notifs, attending, programs, profile }));
   }, [entered, balance, activityCoins, txns, appliedWork, orders, workspaces, publications, notifs, attending, programs, profile]);
+
+  // Live mode: the public catalog (packs, store, services, briefs) comes from
+  // the database — no session needed; demo catalog stays as the fallback.
+  React.useEffect(() => {
+    if (!BE || !BE.loadCatalog) return;
+    let alive = true;
+    BE.loadCatalog().then((c) => { if (alive && c) setCatalog(c); })
+      .catch((e) => console.warn('[beingcamp] catalog load failed:', e));
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Live mode: restore the Supabase session and hydrate from the database.
   // Server state wins for identity + wallet; demo content fills the rest until
@@ -69,6 +86,12 @@ function useBeingCamp(t) {
     greeting: (() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; })(),
     loyalty: 'Loyal',
     entered, tab, sheet, balance, activityCoins, txns, appliedWork, orders, workspaces, publications, rankIndex,
+    // Live catalog with demo fallbacks — screens read these instead of the raw consts.
+    packs: (catalog && catalog.packs) || (typeof COIN_PACKS !== 'undefined' ? COIN_PACKS : []),
+    products: (catalog && catalog.products) || (typeof PRODUCTS !== 'undefined' ? PRODUCTS : []),
+    storeCats: (catalog && catalog.storeCats) || (typeof STORE_CATS !== 'undefined' ? STORE_CATS : ['All']),
+    services: (catalog && catalog.services) || (typeof SERVICES !== 'undefined' ? SERVICES : []),
+    openWork: (catalog && catalog.openWork) || (typeof OPEN_WORK !== 'undefined' ? OPEN_WORK : []),
     notifs, unreadCount: notifs.filter((n) => n.unread).length,
     markRead: (id) => setNotifs((p) => p.map((n) => n.id === id ? { ...n, unread: false } : n)),
     markAllRead: () => setNotifs((p) => p.map((n) => ({ ...n, unread: false }))),

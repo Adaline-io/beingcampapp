@@ -65,7 +65,7 @@ function WorkspaceRow({ S, w }) {
 function FindWorkList({ S }) {
   const [q, setQ] = React.useState('');
   const ql = q.trim().toLowerCase();
-  const list = OPEN_WORK.filter((o) => !ql || [o.title, o.poster, o.cat, o.need, o.desc].join(' ').toLowerCase().includes(ql));
+  const list = S.openWork.filter((o) => !ql || [o.title, o.poster, o.cat, o.need, o.desc].join(' ').toLowerCase().includes(ql));
   return (
     <div>
       <div style={{ fontFamily: 'DM Serif Display, serif', fontStyle: 'italic', fontSize: 15, color: 'var(--muted)', marginBottom: 16, lineHeight: 1.5 }}>

@@ -82,8 +82,9 @@ function WalletScreen({ S }) {
 }
 
 function BuyScreen({ S }) {
-  const [sel, setSel] = React.useState('maker');
-  const pack = COIN_PACKS.find((p) => p.id === sel);
+  const packs = S.packs;
+  const [sel, setSel] = React.useState(null);
+  const pack = packs.find((p) => p.id === sel) || packs.find((p) => p.popular) || packs[0];
   return (
     <div style={{ animation: 'screenIn .3s ease' }}>
       <ScreenHead title="BUY COINS" sub="Cash → BeingCoin" onBack={S.back} />
@@ -91,8 +92,8 @@ function BuyScreen({ S }) {
         Cash enters the ecosystem once. Coins never convert back — they only move within the Camp.
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {COIN_PACKS.map((p) => {
-          const active = sel === p.id;
+        {packs.map((p) => {
+          const active = pack && pack.id === p.id;
           return (
             <button key={p.id} className="tap" onClick={() => setSel(p.id)} style={{ cursor: 'pointer', textAlign: 'left', background: active ? 'linear-gradient(150deg, rgba(201,168,76,0.12), var(--surface))' : 'var(--surface)', border: `1px solid ${active ? 'var(--gold)' : 'var(--line)'}`, borderRadius: 18, padding: 18, position: 'relative' }}>
               {p.popular && <div style={{ position: 'absolute', top: -9, right: 16 }}><Badge tone="gold" solid>Most popular</Badge></div>}

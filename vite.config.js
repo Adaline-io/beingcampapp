@@ -83,6 +83,10 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,webmanifest}'],
         navigateFallback: 'index.html',
+        // New deploys take over immediately instead of waiting for every tab
+        // to close — prevents users being stuck on a stale cached version.
+        skipWaiting: true,
+        clientsClaim: true,
         runtimeCaching: [
           {
             // Google Fonts stylesheets + font files

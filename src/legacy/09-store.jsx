@@ -2,12 +2,12 @@
 
 function StoreScreen({ S }) {
   const [cat, setCat] = React.useState('All');
-  const items = PRODUCTS.filter((p) => cat === 'All' || p.cat === cat);
+  const items = S.products.filter((p) => cat === 'All' || p.cat === cat);
   return (
     <div style={{ animation: 'screenIn .3s ease' }}>
       <ScreenHead title="THE STORE" sub="Priced in BeingCoin" onBack={S.back} right={<WalletChip S={S} />} />
       <div style={{ display: 'flex', gap: 8, overflowX: 'auto', margin: '0 -22px 18px', padding: '0 22px', scrollbarWidth: 'none' }}>
-        {STORE_CATS.map((c) => (
+        {S.storeCats.map((c) => (
           <button key={c} className="tap" onClick={() => setCat(c)} style={{ flexShrink: 0, cursor: 'pointer', fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 600, fontSize: 12.5, padding: '8px 14px', borderRadius: 999, border: `1px solid ${cat === c ? 'var(--gold)' : 'var(--line)'}`, background: cat === c ? 'var(--gold)' : 'var(--surface)', color: cat === c ? '#1a1407' : 'var(--muted)' }}>{c}</button>
         ))}
       </div>
@@ -90,7 +90,7 @@ function ServicesScreen({ S }) {
         </Card>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {SERVICES.map((s) => (
+        {S.services.map((s) => (
           <Card key={s.id} pad={0} onClick={() => S.openSheet('booking', { service: s })} style={{ overflow: 'hidden', display: 'flex' }}>
             <Placeholder tone={s.tone} h={'auto'} radius={0} icon="briefcase" style={{ width: 92, minHeight: 104, flexShrink: 0 }} />
             <div style={{ padding: 14, flex: 1 }}>
