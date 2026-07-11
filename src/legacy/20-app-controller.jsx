@@ -34,6 +34,7 @@ function useBeingCamp(t) {
   const DEFAULT_PROFILE = { name: 'Aman', accent: '#c9a84c', city: 'Calicut', headline: 'Brand & product designer', bio: 'Building things at the Camp — branding, product, and the occasional film. Open to leading small teams.', skills: ['Branding', 'Motion', 'Web Dev'], path: 'maker', since: "Jun '25" };
   const [profile, setProfile] = React.useState(saved.profile ?? (fresh ? null : DEFAULT_PROFILE));
   const [catalog, setCatalog] = React.useState(null); // live catalog from the DB (null → demo data)
+  const [isAdmin, setIsAdmin] = React.useState(false); // founder/admin flag from the profile row
   const [toastData, setToastData] = React.useState(null);
   const rankIndex = Math.max(0, Math.min(4, t.rankIndex ?? 1));
 
@@ -84,6 +85,7 @@ function useBeingCamp(t) {
         if (b.txns.length) setTxns(b.txns);
         if (b.orders.length) setOrders(b.orders);
         if (b.projects) setWorkspaces(b.projects); // server truth for signed-in members
+        setIsAdmin(!!b.isAdmin);
         setEntered(true);
       } else if (entered && profile) {
         // Entered locally but no server account (e.g. sign-ins were disabled
@@ -117,6 +119,7 @@ function useBeingCamp(t) {
     services: (catalog && catalog.services) || (typeof SERVICES !== 'undefined' ? SERVICES : []),
     openWork: (catalog && catalog.openWork) || (typeof OPEN_WORK !== 'undefined' ? OPEN_WORK : []),
     leaders: (catalog && catalog.leaders && catalog.leaders.length ? catalog.leaders : null),
+    isAdmin,
     notifs, unreadCount: notifs.filter((n) => n.unread).length,
     markRead: (id) => setNotifs((p) => p.map((n) => n.id === id ? { ...n, unread: false } : n)),
     markAllRead: () => setNotifs((p) => p.map((n) => ({ ...n, unread: false }))),

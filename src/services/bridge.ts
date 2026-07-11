@@ -57,6 +57,7 @@ interface UiOrder {
 }
 
 interface BootState {
+  isAdmin: boolean;
   profile: UiProfile | null;
   balance: number;
   activityCoins: number;
@@ -146,6 +147,7 @@ export const backend = {
       ]);
 
       return {
+        isAdmin: Boolean((profileRow as Record<string, unknown>).is_admin),
         profile: rowToProfile(profileRow),
         balance: profileRow.balance,
         activityCoins: profileRow.activity_coins,
@@ -509,6 +511,75 @@ export const backend = {
       .from('workshop_rsvps')
       .insert({ workshop_id: workshopId, profile_id: userId });
     if (error && !String(error.message).includes('duplicate')) throw error;
+  },
+
+  /* --------------------------------- Admin --------------------------------- */
+
+  /** All members, newest first (profiles are public-read). */
+  async adminListMembers(): Promise<Array<Record<string, unknown>>> {
+    const { requireSupabase } = await import('../lib/supabase');
+    const { data: rows, error } = await requireSupabase()
+      .from('profiles')
+      .select('id, name, city, rank_index, balance, activity_coins, created_at')
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (error) throw error;
+    return rows ?? [];
+  },
+
+  /** Grant/deduct coins for a member (admin_grant RPC, admin-gated in SQL). */
+  async adminGrant(profileId: string, amount: number, label: string): Promise<void> {
+    const { requireSupabase } = await import('../lib/supabase');
+    const { error } = await requireSupabase().rpc('admin_grant', {
+      p_profile: profileId,
+      p_amount: Math.round(amount),
+      p_label: label,
+    });
+    if (error) throw error;
+  },
+
+  /** Set a member's rank (admin_set_rank RPC). */
+  async adminSetRank(profileId: string, rank: number): Promise<void> {
+    const { requireSupabase } = await import('../lib/supabase');
+    const { error } = await requireSupabase().rpc('admin_set_rank', {
+      p_profile: profileId,
+      p_rank: rank,
+    });
+    if (error) throw error;
+  },
+
+  /** Post a brief to the Pool (admins post as the house). */
+  async adminAddBrief(input: {
+    title: string;
+    org: string;
+    cat: string;
+    budget: number;
+    summary: string;
+  }): Promise<void> {
+    const userId = await currentUserId();
+    const { requireSupabase } = await import('../lib/supabase');
+    const { error } = await requireSupabase().from('pool_briefs').insert({
+      title: input.title,
+      org: input.org,
+      cat: ['Branding', 'Production', 'Tech', 'Marketing'].includes(input.cat)
+        ? input.cat
+        : 'Branding',
+      budget: Math.round(input.budget),
+      summary: input.summary,
+      posted_by: userId,
+      status: 'open',
+    });
+    if (error) throw error;
+  },
+
+  /** Close a brief (admin RLS policy allows the update). */
+  async adminCloseBrief(briefId: string): Promise<void> {
+    const { requireSupabase } = await import('../lib/supabase');
+    const { error } = await requireSupabase()
+      .from('pool_briefs')
+      .update({ status: 'closed' })
+      .eq('id', briefId);
+    if (error) throw error;
   },
 
   /** DB project row (+milestones/members) → the UI workspace shape. */

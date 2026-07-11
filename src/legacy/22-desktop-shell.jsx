@@ -69,6 +69,10 @@ function DesktopSidebar({ S }) {
           onClick={() => S.setTab(n.id)} />
       ))}
 
+      {S.isAdmin && (
+        <DeskNavBtn icon="spark" label="Admin" active={activeSub === 'admin'} onClick={() => goSub('admin')} />
+      )}
+
       {sectionLabel('Everything else')}
       {DESK_NAV_MORE.map((n) => (
         <DeskNavBtn key={n.screen} icon={n.icon} label={n.label}
@@ -633,6 +637,112 @@ function DesktopNotifications({ S }) {
   );
 }
 
+
+// ── Desktop Admin: founder tools (members, coins, ranks, briefs) ─────────
+function DesktopAdmin({ S }) {
+  const BE = typeof window !== 'undefined' ? window.BeingCampBackend : null;
+  const [members, setMembers] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+  const RANK_NAMES = RANK_PERKS.map((r) => r.name);
+
+  const reload = React.useCallback(() => {
+    if (!BE || !BE.enabled) return;
+    BE.adminListMembers().then(setMembers).catch((e) => { console.warn(e); S.toast({ msg: 'Could not load members', icon: 'wallet' }); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  React.useEffect(() => { reload(); }, [reload]);
+
+  const grant = async (m) => {
+    const amt = parseInt(prompt(`Grant coins to ${m.name} (negative to deduct):`, '100') || '', 10);
+    if (!amt) return;
+    const label = prompt('Ledger label:', 'Camp grant') || 'Camp grant';
+    setBusy(true);
+    try { await BE.adminGrant(m.id, amt, label); S.toast({ msg: `${amt > 0 ? '+' : ''}${amt} BC → ${m.name}`, coin: amt }); reload(); }
+    catch (e) { S.toast({ msg: 'Grant failed — apply migration 0006?', icon: 'wallet' }); console.warn(e); }
+    setBusy(false);
+  };
+  const setRank = async (m) => {
+    const r = parseInt(prompt(`Rank for ${m.name} — 0 Visitor · 1 Recruit · 2 Builder · 3 Maker · 4 Chief:`, String(m.rank_index)) || '', 10);
+    if (Number.isNaN(r) || r < 0 || r > 4) return;
+    setBusy(true);
+    try { await BE.adminSetRank(m.id, r); S.toast({ msg: `${m.name} → ${RANK_NAMES[r]}` }); reload(); }
+    catch (e) { S.toast({ msg: 'Rank change failed', icon: 'wallet' }); console.warn(e); }
+    setBusy(false);
+  };
+  const addBrief = async () => {
+    const title = prompt('Brief title:'); if (!title) return;
+    const org = prompt('Client / org:', 'BeingCamp') || 'BeingCamp';
+    const cat = prompt('Category — Branding / Production / Tech / Marketing:', 'Branding') || 'Branding';
+    const budget = parseInt(prompt('Budget (BC):', '500') || '0', 10);
+    const summary = prompt('One-line summary:') || '';
+    setBusy(true);
+    try { await BE.adminAddBrief({ title, org, cat, budget, summary }); S.toast({ msg: 'Brief posted to the Pool' }); }
+    catch (e) { S.toast({ msg: 'Post failed — apply migration 0006?', icon: 'wallet' }); console.warn(e); }
+    setBusy(false);
+  };
+
+  if (!S.isAdmin) {
+    return (
+      <DeskCard>
+        <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 15, color: 'var(--text)' }}>Admin only</div>
+        <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Your profile doesn&rsquo;t have the admin flag.</div>
+      </DeskCard>
+    );
+  }
+
+  return (
+    <div style={{ animation: 'screenIn .3s ease', opacity: busy ? 0.6 : 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20 }}>
+        <div>
+          <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 34, color: 'var(--text)', lineHeight: 1 }}>ADMIN</div>
+          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Members, coins, ranks & briefs</div>
+        </div>
+        <div style={{ marginLeft: 'auto' }}>
+          <Btn variant="primary" icon="plus" onClick={addBrief}>Post a brief</Btn>
+        </div>
+      </div>
+
+      <DeskSectionHead label={`Members${members ? ` · ${members.length}` : ''}`} action="Reload" onAction={reload} />
+      <DeskCard style={{ padding: '4px 20px' }}>
+        {!members && <div style={{ padding: '14px 0', fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--dim)' }}>Loading members…</div>}
+        {members && members.length === 0 && <div style={{ padding: '14px 0', fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--dim)' }}>No members yet.</div>}
+        {(members || []).map((m, i, a) => (
+          <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: i < a.length - 1 ? '1px solid var(--line)' : 'none' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>{m.name || 'Unnamed'}</div>
+              <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'var(--dim)', marginTop: 2 }}>{m.city || '—'} · joined {String(m.created_at).slice(0, 10)}</div>
+            </div>
+            <Badge tone="gold">{RANK_NAMES[m.rank_index] || 'Visitor'}</Badge>
+            <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 12.5, color: 'var(--gold)', minWidth: 80, textAlign: 'right' }}>{fmt(m.balance)} BC</span>
+            <Btn variant="outline" size="sm" onClick={() => grant(m)}>Grant</Btn>
+            <Btn variant="ghost" size="sm" onClick={() => setRank(m)}>Rank</Btn>
+          </div>
+        ))}
+      </DeskCard>
+
+      <DeskSectionHead label="Open briefs in the Pool" />
+      <DeskCard style={{ padding: '4px 20px' }}>
+        {(S.openWork || []).map((o, i, a) => (
+          <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: i < a.length - 1 ? '1px solid var(--line)' : 'none' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>{o.title}</div>
+              <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'var(--dim)', marginTop: 2 }}>{o.poster} · {o.cat}</div>
+            </div>
+            <BC amount={o.pay} size={13} color="var(--gold)" />
+            {/^[0-9a-f-]{36}$/i.test(o.id) && (
+              <Btn variant="danger" size="sm" onClick={async () => {
+                if (!confirm(`Close "${o.title}"?`)) return;
+                try { await BE.adminCloseBrief(o.id); S.toast({ msg: 'Brief closed' }); }
+                catch (e) { S.toast({ msg: 'Close failed', icon: 'wallet' }); console.warn(e); }
+              }}>Close</Btn>
+            )}
+          </div>
+        ))}
+      </DeskCard>
+    </div>
+  );
+}
+
 // ── Right rail: live context beside every non-home screen ──────────────
 function DesktopRail({ S }) {
   const notifs = (S.notifs || []).filter((n) => n.unread).slice(0, 3);
@@ -692,7 +802,7 @@ function BeingCampDesktop({ t }) {
   // Tabs and key sub-screens get desktop-native wide views; everything else
   // falls back to the phone column + context rail.
   const wideTabs = { home: DesktopHome, showcase: DesktopShowcase, projects: DesktopProjects, profile: DesktopYou };
-  const wideSubs = { wallet: DesktopWallet, store: DesktopStore, programs: DesktopPrograms, leaders: DesktopLeaders, scan: DesktopZones, orders: DesktopOrders, notifications: DesktopNotifications };
+  const wideSubs = { wallet: DesktopWallet, store: DesktopStore, programs: DesktopPrograms, leaders: DesktopLeaders, scan: DesktopZones, orders: DesktopOrders, notifications: DesktopNotifications, admin: DesktopAdmin };
   const WideView = S.topScreen ? wideSubs[S.topScreen] : wideTabs[S.tab];
 
   return (
