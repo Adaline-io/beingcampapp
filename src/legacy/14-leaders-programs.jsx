@@ -2,7 +2,7 @@
 
 function LeadersScreen({ S }) {
   const [board, setBoard] = React.useState('month');
-  const list = LEADERS;
+  const list = S.leaders || LEADERS;
   const top3 = list.slice(0, 3);
   const podiumOrder = [top3[1], top3[0], top3[2]]; // 2nd, 1st, 3rd
   const heights = [70, 92, 56];

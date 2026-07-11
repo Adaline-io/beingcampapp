@@ -46,8 +46,25 @@ function useBeingCamp(t) {
   React.useEffect(() => {
     if (!BE || !BE.loadCatalog) return;
     let alive = true;
-    BE.loadCatalog().then((c) => { if (alive && c) setCatalog(c); })
-      .catch((e) => console.warn('[beingcamp] catalog load failed:', e));
+    BE.loadCatalog().then((c) => {
+      if (!alive || !c) return;
+      setCatalog(c);
+      // Shared Showcase: DB publications replace their demo counterparts,
+      // local-only pieces (just published, not yet fetched) stay on top.
+      if (c.publications && c.publications.length) {
+        setPublications((prev) => {
+          const ids = new Set(c.publications.map((p) => p.id));
+          return [...prev.filter((p) => p.mine && !ids.has(p.id)), ...c.publications];
+        });
+      }
+      // Real programs from the DB + anything the member is hosting locally.
+      if (c.workshops && c.workshops.length) {
+        setPrograms((prev) => {
+          const ids = new Set(c.workshops.map((w) => w.id));
+          return [...prev.filter((w) => w.mine && !ids.has(w.id)), ...c.workshops];
+        });
+      }
+    }).catch((e) => console.warn('[beingcamp] catalog load failed:', e));
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -66,6 +83,7 @@ function useBeingCamp(t) {
         setActivityCoins(b.activityCoins);
         if (b.txns.length) setTxns(b.txns);
         if (b.orders.length) setOrders(b.orders);
+        if (b.projects) setWorkspaces(b.projects); // server truth for signed-in members
         setEntered(true);
       } else if (entered && profile) {
         // Entered locally but no server account (e.g. sign-ins were disabled
@@ -98,11 +116,12 @@ function useBeingCamp(t) {
     storeCats: (catalog && catalog.storeCats) || (typeof STORE_CATS !== 'undefined' ? STORE_CATS : ['All']),
     services: (catalog && catalog.services) || (typeof SERVICES !== 'undefined' ? SERVICES : []),
     openWork: (catalog && catalog.openWork) || (typeof OPEN_WORK !== 'undefined' ? OPEN_WORK : []),
+    leaders: (catalog && catalog.leaders && catalog.leaders.length ? catalog.leaders : null),
     notifs, unreadCount: notifs.filter((n) => n.unread).length,
     markRead: (id) => setNotifs((p) => p.map((n) => n.id === id ? { ...n, unread: false } : n)),
     markAllRead: () => setNotifs((p) => p.map((n) => ({ ...n, unread: false }))),
     attending,
-    rsvp: (id) => setAttending((p) => p.includes(id) ? p : [...p, id]),
+    rsvp: (id) => { setAttending((p) => p.includes(id) ? p : [...p, id]); if (BE) mirror(BE.syncRsvp(id)); },
     cancelRsvp: (id) => setAttending((p) => p.filter((x) => x !== id)),
     programs,
     addProgram: (p) => setPrograms((prev) => [{
@@ -116,6 +135,11 @@ function useBeingCamp(t) {
     back: () => setStack((s) => s.slice(0, -1)),
     openSheet: (name, payload = {}) => setSheet({ name, payload }),
     closeSheet: () => setSheet({ name: null, payload: {} }),
+    checkinZone: (zone) => {
+      if (zone.cost > 0) { setBalance((b) => b - zone.cost); pushTxn(`${zone.name} · check-in`, -zone.cost, 'zone'); }
+      toast({ msg: `Checked in · ${zone.name}`, icon: 'scan' });
+      if (BE) mirror(BE.syncCheckin(zone.id));
+    },
     spend: (amt, label, ref) => { setBalance((b) => b - amt); pushTxn(label, -amt, ref); toast({ msg: label, coin: -amt }); if (BE) mirror(BE.syncTransaction(label, -amt, ref)); },
     earn: (amt, label, ref) => { setBalance((b) => b + amt); setActivityCoins((a) => a + amt); pushTxn(label, amt, ref); toast({ msg: label, coin: amt }); if (BE) mirror(BE.syncTransaction(label, amt, ref)); },
     buyPack: (pack) => { const total = pack.coins + pack.bonus; const label = `${pack.name}${pack.bonus ? ` · +${pack.bonus} bonus` : ''}`; setBalance((b) => b + total); pushTxn(label, total, 'pack'); if (BE) mirror(BE.syncTransaction(label, total, 'pack')); },
@@ -128,8 +152,21 @@ function useBeingCamp(t) {
       }, ...p]);
       if (BE) mirror(BE.syncOrder({ item: product.name, source: product.source, bc: product.bc, tone: product.tone, type: product.type === 'physical' ? 'physical' : 'pass', stage: product.type === 'physical' ? 0 : 4 }));
     },
-    addPostedWork: ({ cat, budget }) => setWorkspaces((p) => [{
-      id: 'w' + Date.now(), title: 'Your new ' + cat.toLowerCase() + ' project', poster: 'You', cat,
+    addPostedWork: ({ cat, budget }) => {
+      const tempId = 'w' + Date.now();
+      const title = 'Your new ' + cat.toLowerCase() + ' project';
+      const milestones = [
+        { name: 'Milestone 1', bc: Math.round(budget * 0.4), status: 'todo' },
+        { name: 'Milestone 2', bc: Math.round(budget * 0.35), status: 'todo' },
+        { name: 'Final delivery', bc: budget - Math.round(budget * 0.4) - Math.round(budget * 0.35), status: 'todo' },
+      ];
+      if (BE) {
+        BE.syncProject({ title, cat, budget, milestones })
+          .then((w) => { if (w) setWorkspaces((prev) => prev.map((x) => x.id === tempId ? { ...w, shortlist: x.shortlist, chat: x.chat } : x)); })
+          .catch((e) => console.warn('[beingcamp] project sync failed:', e));
+      }
+      setWorkspaces((p) => [{
+      id: tempId, title, poster: 'You', cat,
       you: 'poster', role: 'Poster', stage: 1, budget, escrowReleased: 0, deadline: 'Confirm team',
       team: [],
       shortlist: [
@@ -137,17 +174,21 @@ function useBeingCamp(t) {
         { name: 'Arjun M.', role: 'Specialist', rank: 'Builder', match: 80, pitch: 'Available now, fast and reliable on delivery.' },
         { name: 'Sami K.', role: 'Support', rank: 'Builder', match: 74, pitch: 'Happy to support on copy and coordination.' },
       ],
-      milestones: [{ name: 'Milestone 1', bc: Math.round(budget * 0.4), status: 'todo' }, { name: 'Milestone 2', bc: Math.round(budget * 0.35), status: 'todo' }, { name: 'Final delivery', bc: budget - Math.round(budget * 0.4) - Math.round(budget * 0.35), status: 'todo' }],
+      milestones,
       chat: [{ who: 'Aslam · Authority', msg: 'Got your brief — here\u2019s a shortlist. Confirm your team to kick off.', when: 'Now', you: false }],
       files: [], schedule: [],
-    }, ...p]),
+    }, ...p]);
+    },
     updateWorkspace: (w) => setWorkspaces((p) => p.map((x) => x.id === w.id ? w : x)),
     addSchedule: (id, item) => setWorkspaces((p) => p.map((x) => x.id === id ? { ...x, schedule: [...(x.schedule || []), item] } : x)),
-    addPublication: ({ type, title, project }) => setPublications((p) => [{
-      id: 'pub' + Date.now(), type, title, author: 'You', init: 'AM', tone: '#26201a',
-      tags: [type === 'Theory' ? 'Essay' : 'New'], claps: 0, read: type === 'Work' ? 'Gallery' : '2 min',
-      excerpt: 'Just published to the Showcase.', project: !!project, mine: true,
-    }, ...p]),
+    addPublication: ({ type, title, project }) => {
+      setPublications((prev) => [{
+        id: 'pub' + Date.now(), type, title, author: p.name, init: initialsOf(p.name), tone: '#26201a',
+        tags: [type === 'Theory' ? 'Essay' : 'New'], claps: 0, read: type === 'Work' ? 'Gallery' : '2 min',
+        excerpt: 'Just published to the Showcase.', project: !!project, mine: true,
+      }, ...prev]);
+      if (BE) mirror(BE.syncPublication({ type, title, author: p.name }));
+    },
     enter: (newProfile) => { if (newProfile) setProfile(newProfile); setEntered(true); setTab('home'); if (BE) mirror(BE.signIn(newProfile || p, fresh ? 100 : balance)); },
     signOut: () => { setEntered(false); setStack([]); setTab('home'); if (BE) mirror(BE.signOut()); },
     resetDemo: () => { localStorage.removeItem(PKEY); location.reload(); },

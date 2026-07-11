@@ -62,6 +62,7 @@ interface BootState {
   activityCoins: number;
   txns: UiTxn[];
   orders: UiOrder[];
+  projects: Array<Record<string, unknown>>;
 }
 
 /* --------------------------------- Helpers -------------------------------- */
@@ -138,15 +139,19 @@ export const backend = {
         .catch(() => null)) as ProfileRow | null;
       if (!profileRow) return null;
 
-      const [txnRows, orderRows] = await Promise.all([
+      const [txnRows, orderRows, projectRows] = await Promise.all([
         data.getTransactions(userId).catch(() => []),
         data.getOrders(userId).catch(() => []),
+        data.getMyProjects().catch(() => []),
       ]);
 
       return {
         profile: rowToProfile(profileRow),
         balance: profileRow.balance,
         activityCoins: profileRow.activity_coins,
+        projects: (projectRows as Array<Record<string, unknown>>).map((r) =>
+          backend.mapProject(r)
+        ),
         txns: (txnRows as Array<Record<string, unknown>>).map((r) => ({
           id: String(r.id),
           label: String(r.label),
@@ -181,13 +186,23 @@ export const backend = {
   async loadCatalog(): Promise<Record<string, unknown> | null> {
     if (!isBackendEnabled) return null;
     try {
-      const [packs, products, services, briefs] = await Promise.all([
-        data.getCoinPacks(),
-        data.getProducts(),
-        data.getServices(),
-        data.getPoolBriefs(),
-      ]);
+      const [packs, products, services, briefs, pubs, workshops, zones, leaders] =
+        await Promise.all([
+          data.getCoinPacks(),
+          data.getProducts(),
+          data.getServices(),
+          data.getPoolBriefs(),
+          data.getPublications().catch(() => []),
+          data.getWorkshops().catch(() => []),
+          data.getZones().catch(() => []),
+          data.getLeaders().catch(() => []),
+        ]);
       if (!packs.length && !products.length) return null;
+      const zoneName = new Map(
+        (zones as Array<Record<string, unknown>>).map((z) => [String(z.id), String(z.name)])
+      );
+      const initials = (name: string) =>
+        name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
 
       const uiPacks = (packs as Array<Record<string, unknown>>).map((p, i) => {
         const coins = Number(p.coins);
@@ -242,12 +257,58 @@ export const backend = {
         desc: String(b.summary ?? ''),
       }));
 
+      const uiPublications = (pubs as Array<Record<string, unknown>>).map((p) => ({
+        id: String(p.id),
+        type: String(p.kind),
+        title: String(p.title),
+        author: String(p.author),
+        init: initials(String(p.author)),
+        tone: String(p.tone ?? '#26201a'),
+        tags: [p.kind === 'Theory' ? 'Essay' : 'New'],
+        claps: 0,
+        read: p.kind === 'Work' ? 'Gallery' : '4 min',
+        excerpt: String(p.summary ?? ''),
+        authorId: (p.author_id as string | null) ?? null,
+      }));
+
+      const uiWorkshops = (workshops as Array<Record<string, unknown>>).map((w) => ({
+        id: String(w.id),
+        title: String(w.title),
+        host: String(w.host),
+        init: initials(String(w.host)),
+        when: String(w.when_text ?? 'Soon'),
+        date: String(w.date_text ?? 'soon'),
+        zone: zoneName.get(String(w.zone_id)) ?? 'The Camp',
+        cost: Number(w.cost ?? 0),
+        seats: Number(w.seats ?? 0),
+        taken: Number(w.taken ?? 0),
+        tag: String(w.tag ?? 'Session'),
+        tone: String(w.tone ?? '#26201a'),
+        desc: String(w.description ?? ''),
+      }));
+
+      const tier = (rankIndex: number) =>
+        rankIndex >= 4 ? 'OG' : rankIndex >= 2 ? 'Loyal' : 'Regular';
+      const me = await currentUserId().catch(() => null);
+      const uiLeaders = (leaders as Array<Record<string, unknown>>).map((p, i) => ({
+        rank: i + 1,
+        name: String(p.name ?? 'Member'),
+        init: initials(String(p.name ?? '?')),
+        earned: Number(p.activity_coins ?? 0),
+        delivered: 0,
+        tier: tier(Number(p.rank_index ?? 0)),
+        you: me !== null && String(p.id) === me,
+      }));
+
       return {
         packs: uiPacks,
         products: uiProducts,
         storeCats,
         services: uiServices,
         openWork: uiOpenWork,
+        publications: uiPublications,
+        workshops: uiWorkshops,
+        leaders: uiLeaders,
       };
     } catch (err) {
       console.warn('[beingcamp] catalog load failed, using demo catalog:', err);
@@ -367,6 +428,118 @@ export const backend = {
   async signOut(): Promise<void> {
     if (!isBackendEnabled) return;
     await auth.signOut();
+  },
+
+  /* ------------------- Shared data loop (projects & community) ------------------- */
+
+  /** Zone check-in: rank gate + cost charged server-side (record_checkin RPC). */
+  async syncCheckin(zoneId: string): Promise<void> {
+    if (!isBackendEnabled) return;
+    if (!(await currentUserId())) return;
+    const { requireSupabase } = await import('../lib/supabase');
+    const { error } = await requireSupabase().rpc('record_checkin', { p_zone_id: zoneId });
+    if (error) throw error;
+  },
+
+  /**
+   * Create a real project (+ milestones + poster membership) and return it in
+   * the UI workspace shape, so the controller can swap its local copy for the
+   * server one (milestones carry dbId for later escrow release).
+   */
+  async syncProject(input: {
+    title: string;
+    cat: string;
+    budget: number;
+    milestones: Array<{ name: string; bc: number }>;
+  }): Promise<Record<string, unknown> | null> {
+    if (!isBackendEnabled) return null;
+    if (!(await currentUserId())) return null;
+    const { requireSupabase } = await import('../lib/supabase');
+    const sb = requireSupabase();
+    const { data: projectId, error } = await sb.rpc('create_project', {
+      p_title: input.title,
+      p_cat: input.cat,
+      p_budget: Math.round(input.budget),
+      p_milestones: input.milestones.map((m) => ({ label: m.name, amount: Math.round(m.bc) })),
+    });
+    if (error) throw error;
+    const { data: rows, error: qErr } = await sb
+      .from('projects')
+      .select('*, project_milestones(*), project_members(*)')
+      .eq('id', projectId as string);
+    if (qErr) throw qErr;
+    const row = rows?.[0];
+    return row ? this.mapProject(row as Record<string, unknown>) : null;
+  },
+
+  /** Escrow release for a server-backed milestone (owner-only, paid in SQL). */
+  async releaseMilestone(milestoneDbId: string): Promise<void> {
+    if (!isBackendEnabled) return;
+    const { requireSupabase } = await import('../lib/supabase');
+    const { error } = await requireSupabase().rpc('release_milestone', {
+      p_milestone_id: milestoneDbId,
+    });
+    if (error) throw error;
+  },
+
+  /** Publish to the shared Showcase. */
+  async syncPublication(input: { type: string; title: string; author: string }): Promise<void> {
+    if (!isBackendEnabled) return;
+    const userId = await currentUserId();
+    if (!userId) return;
+    const { requireSupabase } = await import('../lib/supabase');
+    const { error } = await requireSupabase().from('publications').insert({
+      author_id: userId,
+      author: input.author,
+      title: input.title,
+      kind: ['Case Study', 'Work', 'Theory'].includes(input.type) ? input.type : 'Work',
+      summary: 'Published from the app.',
+    });
+    if (error) throw error;
+  },
+
+  /** RSVP to a database workshop (uuid ids only — demo ids stay local). */
+  async syncRsvp(workshopId: string): Promise<void> {
+    if (!isBackendEnabled) return;
+    const userId = await currentUserId();
+    if (!userId) return;
+    if (!/^[0-9a-f-]{36}$/i.test(workshopId)) return;
+    const { requireSupabase } = await import('../lib/supabase');
+    const { error } = await requireSupabase()
+      .from('workshop_rsvps')
+      .insert({ workshop_id: workshopId, profile_id: userId });
+    if (error && !String(error.message).includes('duplicate')) throw error;
+  },
+
+  /** DB project row (+milestones/members) → the UI workspace shape. */
+  mapProject(row: Record<string, unknown>): Record<string, unknown> {
+    const ms = ((row.project_milestones as Array<Record<string, unknown>>) ?? [])
+      .slice()
+      .sort((a, b) => Number(a.sort) - Number(b.sort));
+    const firstOpen = ms.findIndex((m) => !m.released);
+    return {
+      id: String(row.id),
+      title: String(row.title),
+      poster: 'You',
+      cat: String(row.cat ?? 'Branding'),
+      you: 'poster',
+      role: 'Poster',
+      stage: Number(row.stage ?? 1),
+      budget: Number(row.budget ?? 0),
+      escrowReleased: ms.filter((m) => m.released).reduce((s, m) => s + Number(m.amount), 0),
+      deadline: 'Open',
+      team: [],
+      shortlist: [],
+      milestones: ms.map((m, i) => ({
+        dbId: String(m.id),
+        name: String(m.label),
+        bc: Number(m.amount),
+        status: m.released ? 'done' : i === firstOpen ? 'active' : 'todo',
+      })),
+      chat: [],
+      files: [],
+      schedule: [],
+    };
   },
 };
 

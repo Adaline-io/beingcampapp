@@ -70,8 +70,7 @@ function CheckinSheet({ S, zone, onClose }) {
   const checkin = () => {
     if (locked) return;
     if (!afford) { onClose(); S.go('buy'); S.toast({ msg: 'Top up to check in', icon: 'wallet' }); return; }
-    if (zone.cost > 0) S.spend(zone.cost, `${zone.name} · check-in`, 'zone');
-    else S.toast({ msg: `Checked in · ${zone.name}`, icon: 'pin' });
+    S.checkinZone(zone);
     setDone(true);
   };
   if (done) {

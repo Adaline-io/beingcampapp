@@ -169,13 +169,25 @@ export async function markNotificationRead(id: string) {
 
 /* ------------------------------- Projects --------------------------------- */
 
-export async function getMyProjects(profileId: string) {
+export async function getMyProjects() {
   const sb = requireSupabase();
+  // RLS already scopes rows to projects the caller owns or belongs to.
   const { data, error } = await sb
     .from('projects')
     .select('*, project_members(*), project_milestones(*)')
-    .or(`owner_id.eq.${profileId}`)
     .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+/** Top members by activity for the leaderboard (profiles are public-read). */
+export async function getLeaders(limit = 8) {
+  const sb = requireSupabase();
+  const { data, error } = await sb
+    .from('profiles')
+    .select('id, name, activity_coins, rank_index')
+    .order('activity_coins', { ascending: false })
+    .limit(limit);
   if (error) throw error;
   return data;
 }

@@ -170,6 +170,10 @@ function WSTasks({ S, w, setW }) {
       const allDone = ms.every((m) => m.status === 'done');
       return { ...prev, milestones: ms, escrowReleased: Math.min(prev.budget, prev.escrowReleased + prev.milestones[idx].bc), stage: allDone ? 4 : prev.stage };
     });
+    // Server-backed milestones settle escrow in the database as well.
+    const dbId = w.milestones[idx] && w.milestones[idx].dbId;
+    const BE = typeof window !== 'undefined' && window.BeingCampBackend;
+    if (dbId && BE && BE.enabled) BE.releaseMilestone(dbId).catch((e) => console.warn('[beingcamp] milestone release sync failed:', e));
     S.toast({ msg: `Milestone released · ${fmt(w.milestones[idx].bc)} BC`, coin: w.milestones[idx].bc });
   };
   return (
