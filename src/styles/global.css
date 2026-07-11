@@ -176,6 +176,41 @@ button.tap:active {
   }
 }
 
+/* Responsive desktop grids: two-up rows and the hero pair collapse on
+   narrower windows; auto-fill card grids reflow on their own. */
+.desk-hero {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 14px;
+}
+.desk-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 940px) {
+  .desk-hero,
+  .desk-2col {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Sidebar collapses to an icon rail on smaller windows. */
+.desk-sidebar {
+  width: 264px;
+  transition: width 0.2s ease;
+}
+@media (max-width: 1024px) {
+  .desk-sidebar {
+    width: 78px;
+  }
+  .desk-sidebar .desk-label,
+  .desk-sidebar .desk-side-extra {
+    /* !important: several of these carry inline display:flex */
+    display: none !important;
+  }
+}
+
 /* Real device (native shell, installed PWA, phone browser): the app is the screen.
    Fixed inset + dvh handles mobile browser chrome. The design already reserves
    52px at the top (status-bar zone) and 26px under the tab bar (home indicator),
