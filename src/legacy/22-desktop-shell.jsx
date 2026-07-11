@@ -477,6 +477,162 @@ function DesktopYou({ S }) {
   );
 }
 
+
+// ── Desktop Programs: workshop card grid ─────────────────────────────────
+function DesktopPrograms({ S }) {
+  return (
+    <div style={{ animation: 'screenIn .3s ease' }}>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20 }}>
+        <div>
+          <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 34, color: 'var(--text)', lineHeight: 1 }}>PROGRAMS</div>
+          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Workshops & sessions at the Camp</div>
+        </div>
+        <div style={{ marginLeft: 'auto' }}>
+          <Btn variant="primary" icon="plus" onClick={() => S.openSheet('hostProgram')}>Host a program</Btn>
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', gap: 14 }}>
+        {(S.programs || []).map((w) => {
+          const isOn = (S.attending || []).includes(w.id);
+          const left = w.seats - w.taken;
+          return (
+            <DeskCard key={w.id} onClick={() => S.openSheet('rsvp', { workshop: w })} style={{ padding: 0, overflow: 'hidden' }}>
+              <Placeholder tone={w.tone} h={100} radius={0} icon="calendar" />
+              <div style={{ padding: '13px 16px 15px' }}>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <Badge tone="blue">{w.tag}</Badge>
+                  {isOn && <Badge tone="green">Reserved</Badge>}
+                </div>
+                <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 14.5, color: 'var(--text)', lineHeight: 1.3 }}>{w.title}</div>
+                <div style={{ display: 'flex', fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'var(--dim)', marginTop: 8 }}>
+                  <span>{w.host} · {w.when}</span>
+                  <span style={{ marginLeft: 'auto', color: left <= 3 ? 'var(--red)' : 'var(--dim)' }}>{left} left</span>
+                </div>
+              </div>
+            </DeskCard>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Desktop Leaders: leaderboard table ───────────────────────────────────
+function DesktopLeaders({ S }) {
+  const list = S.leaders || LEADERS;
+  return (
+    <div style={{ animation: 'screenIn .3s ease' }}>
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 34, color: 'var(--text)', lineHeight: 1 }}>LEADERS</div>
+        <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Top of the Camp — ranked by activity coins earned</div>
+      </div>
+      <DeskCard style={{ padding: '4px 20px' }}>
+        {list.map((l, i, a) => (
+          <div key={l.rank} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 0', borderBottom: i < a.length - 1 ? '1px solid var(--line)' : 'none', background: l.you ? 'var(--gold-dim)' : 'transparent', margin: l.you ? '0 -20px' : 0, paddingLeft: l.you ? 20 : 0, paddingRight: l.you ? 20 : 0, borderRadius: l.you ? 12 : 0 }}>
+            <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, color: l.rank <= 3 ? 'var(--gold)' : 'var(--dim)', width: 30 }}>{l.rank}</span>
+            <span style={{ width: 34, height: 34, borderRadius: 11, background: 'var(--panel)', border: '1px solid var(--line2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, fontSize: 12, color: 'var(--muted)' }}>{l.init}</span>
+            <span style={{ flex: 1, fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: l.you ? 800 : 600, fontSize: 14.5, color: 'var(--text)' }}>{l.name}{l.you ? ' · you' : ''}</span>
+            <Badge tone={l.tier === 'OG' ? 'gold' : l.tier === 'Loyal' ? 'purple' : 'grey'}>{l.tier}</Badge>
+            <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 13, color: 'var(--gold)', minWidth: 90, textAlign: 'right' }}>{fmt(l.earned)} BC</span>
+          </div>
+        ))}
+      </DeskCard>
+    </div>
+  );
+}
+
+// ── Desktop Zones: the physical space as a card grid ────────────────────
+function DesktopZones({ S }) {
+  return (
+    <div style={{ animation: 'screenIn .3s ease' }}>
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 34, color: 'var(--text)', lineHeight: 1 }}>ZONES</div>
+        <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Check in as you move through the space</div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
+        {ZONES.map((z) => {
+          const locked = S.rankIndex < z.minRank;
+          return (
+            <DeskCard key={z.id} onClick={() => S.openSheet('checkin', { zone: z })} style={{ opacity: locked ? 0.55 : 1 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'var(--dim)' }}>{z.n}</span>
+                <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, color: 'var(--text)' }}>{z.name}</span>
+                <span style={{ marginLeft: 'auto' }}><Badge tone={locked ? 'grey' : 'gold'}>{z.layer}</Badge></span>
+              </div>
+              <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12.5, color: 'var(--muted)', margin: '8px 0 10px' }}>{z.desc}</div>
+              <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 11, color: locked ? 'var(--red)' : 'var(--gold)' }}>
+                {locked ? `Requires ${RANK_PERKS[z.minRank].name}` : z.cost === 0 ? 'Free entry' : `${z.cost} BC per check-in`}
+              </div>
+            </DeskCard>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Desktop Orders: fulfillment table ────────────────────────────────────
+function DesktopOrders({ S }) {
+  const stages = ['Placed', 'Packed', 'Shipped', 'Out for delivery', 'Delivered'];
+  return (
+    <div style={{ animation: 'screenIn .3s ease' }}>
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 34, color: 'var(--text)', lineHeight: 1 }}>ORDERS</div>
+        <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Purchases & tracking</div>
+      </div>
+      {(S.orders || []).length === 0 ? (
+        <DeskCard onClick={() => { S.setTab('home'); S.go('store'); }}>
+          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 14.5, color: 'var(--text)' }}>No orders yet</div>
+          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Browse the Store — everything is priced in BeingCoin.</div>
+        </DeskCard>
+      ) : (
+        <DeskCard style={{ padding: '4px 20px' }}>
+          {(S.orders || []).map((o, i, a) => (
+            <div key={o.id} className="tap" onClick={() => { S.setTab('home'); S.go('orderDetail', { id: o.id }); }} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 0', borderBottom: i < a.length - 1 ? '1px solid var(--line)' : 'none', cursor: 'pointer' }}>
+              <Icon name={o.type === 'pass' ? 'qr' : 'bag'} size={17} color="var(--muted)" />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>{o.item}</div>
+                <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'var(--dim)', marginTop: 2 }}>{o.id} · {o.when}</div>
+              </div>
+              <Badge tone={o.stage >= 4 ? 'green' : 'blue'}>{o.type === 'pass' ? 'Ready' : stages[o.stage]}</Badge>
+              <BC amount={o.bc} size={13} color="var(--gold)" />
+            </div>
+          ))}
+        </DeskCard>
+      )}
+    </div>
+  );
+}
+
+// ── Desktop Notifications ────────────────────────────────────────────────
+function DesktopNotifications({ S }) {
+  return (
+    <div style={{ animation: 'screenIn .3s ease' }}>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20 }}>
+        <div>
+          <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 34, color: 'var(--text)', lineHeight: 1 }}>NOTIFICATIONS</div>
+          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>{S.unreadCount ? `${S.unreadCount} unread` : 'All caught up'}</div>
+        </div>
+        <div style={{ marginLeft: 'auto' }}>
+          <Btn variant="ghost" onClick={S.markAllRead}>Mark all read</Btn>
+        </div>
+      </div>
+      <DeskCard style={{ padding: '4px 20px' }}>
+        {(S.notifs || []).map((n, i, a) => (
+          <div key={n.id} className="tap" onClick={() => { S.markRead(n.id); if (n.cta) { S.setTab('home'); S.go(n.cta); } }} style={{ display: 'flex', gap: 14, padding: '14px 0', borderBottom: i < a.length - 1 ? '1px solid var(--line)' : 'none', cursor: 'pointer', opacity: n.unread ? 1 : 0.6 }}>
+            <Icon name={n.ic || 'bell'} size={17} color={n.unread ? 'var(--gold)' : 'var(--dim)'} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: n.unread ? 700 : 600, fontSize: 14, color: 'var(--text)' }}>{n.title}</div>
+              <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12.5, color: 'var(--muted)', marginTop: 2 }}>{n.body}</div>
+            </div>
+            <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'var(--dim)', flexShrink: 0 }}>{n.when}</span>
+          </div>
+        ))}
+      </DeskCard>
+    </div>
+  );
+}
+
 // ── Right rail: live context beside every non-home screen ──────────────
 function DesktopRail({ S }) {
   const notifs = (S.notifs || []).filter((n) => n.unread).slice(0, 3);
@@ -536,7 +692,7 @@ function BeingCampDesktop({ t }) {
   // Tabs and key sub-screens get desktop-native wide views; everything else
   // falls back to the phone column + context rail.
   const wideTabs = { home: DesktopHome, showcase: DesktopShowcase, projects: DesktopProjects, profile: DesktopYou };
-  const wideSubs = { wallet: DesktopWallet, store: DesktopStore };
+  const wideSubs = { wallet: DesktopWallet, store: DesktopStore, programs: DesktopPrograms, leaders: DesktopLeaders, scan: DesktopZones, orders: DesktopOrders, notifications: DesktopNotifications };
   const WideView = S.topScreen ? wideSubs[S.topScreen] : wideTabs[S.tab];
 
   return (
