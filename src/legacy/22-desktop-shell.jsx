@@ -25,13 +25,13 @@ function DeskNavBtn({ active, icon, label, badge, onClick }) {
   return (
     <button className="tap" onClick={onClick} style={{
       display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left',
-      background: active ? 'var(--gold-dim)' : 'transparent',
-      border: '1px solid ' + (active ? 'var(--gold-line)' : 'transparent'),
-      borderRadius: 12, padding: '10px 14px', cursor: 'pointer',
+      background: active ? 'var(--gold)' : 'transparent',
+      border: '1px solid transparent',
+      borderRadius: 10, padding: '10px 14px', cursor: 'pointer',
       fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: active ? 700 : 500,
-      fontSize: 14, color: active ? 'var(--gold)' : 'var(--muted)',
+      fontSize: 14, color: active ? '#1a1407' : 'var(--muted)',
     }}>
-      <Icon name={icon} size={18} color={active ? 'var(--gold)' : 'var(--dim)'} />
+      <Icon name={icon} size={18} color={active ? '#1a1407' : 'var(--dim)'} />
       <span className="desk-label" style={{ flex: 1 }}>{label}</span>
       {badge > 0 && (
         <span style={{ minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999, background: 'var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Space Mono, monospace', fontSize: 10, fontWeight: 700, color: '#1a1407' }}>{badge}</span>
@@ -87,7 +87,7 @@ function DesktopSidebar({ S }) {
         <CoinMark size={22} />
         <div style={{ textAlign: 'left' }}>
           <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--dim)' }}>Balance</div>
-          <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 20, color: 'var(--text)', lineHeight: 1 }}>{fmt(S.balance)} <span style={{ fontSize: 12, color: 'var(--gold)' }}>BC</span></div>
+          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 16, color: 'var(--text)', lineHeight: 1 }}>{fmt(S.balance)} <span style={{ fontSize: 12, color: 'var(--gold)' }}>BC</span></div>
         </div>
       </button>
 
@@ -127,6 +127,60 @@ function DeskSectionHead({ label, action, onAction }) {
   );
 }
 
+// ── Reference-style data primitives: area chart, delta chip, stat tile ──
+function AreaChart({ data, color = 'var(--gold)', h = 120, id = 'ac' }) {
+  const series = data && data.length >= 2 ? data : [0, 0];
+  const w = 600;
+  const min = Math.min(...series), max = Math.max(...series);
+  const span = max - min || 1, pad = h * 0.14;
+  const pts = series.map((v, i) => [(i / (series.length - 1)) * w, pad + (1 - (v - min) / span) * (h - 2 * pad)]);
+  const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height: 'auto', display: 'block' }} aria-hidden="true">
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.32" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={`${line} L${w},${h} L0,${h} Z`} fill={`url(#${id})`} />
+      <path d={line} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r="4.5" fill={color} />
+    </svg>
+  );
+}
+
+function DeltaChip({ value, suffix = 'this week' }) {
+  const up = value >= 0;
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'Space Mono, monospace', fontSize: 10, padding: '3px 9px', borderRadius: 999, color: up ? 'var(--green)' : 'var(--red)', background: up ? 'rgba(62,207,122,0.10)' : 'rgba(224,82,82,0.10)' }}>
+      {up ? '\u25B2' : '\u25BC'} {up ? '+' : ''}{fmt(value)} {suffix}
+    </span>
+  );
+}
+
+function DeskStat({ icon, label, value, sub, tone = 'var(--gold)', onClick }) {
+  return (
+    <DeskCard onClick={onClick} style={{ padding: '16px 18px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ width: 28, height: 28, borderRadius: 9, background: 'var(--panel)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name={icon} size={15} color={tone} /></span>
+        <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--dim)' }}>{label}</span>
+      </div>
+      <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, fontSize: 26, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', color: 'var(--text)', margin: '10px 0 3px' }}>{value}</div>
+      <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 11.5, color: 'var(--muted)' }}>{sub}</div>
+    </DeskCard>
+  );
+}
+
+// Running balance history reconstructed from the ledger (newest txn first).
+function balanceSeries(S) {
+  const txns = (S.txns || []).slice(0, 24);
+  let bal = S.balance;
+  const out = [bal];
+  for (const t of txns) { bal -= t.amount; out.push(bal); }
+  return out.reverse();
+}
+
 function DesktopHome({ S }) {
   const rank = RANK_PERKS[S.rankIndex];
   const next = RANK_PERKS[Math.min(4, S.rankIndex + 1)];
@@ -138,8 +192,21 @@ function DesktopHome({ S }) {
     <div style={{ animation: 'screenIn .3s ease' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 18 }}>
         <span style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 14, color: 'var(--muted)' }}>{S.greeting},</span>
-        <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 30, color: 'var(--text)', lineHeight: 1 }}>{S.user.name}</span>
+        <span style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 23, color: 'var(--text)', lineHeight: 1 }}>{S.user.name}</span>
         <Badge tone="gold">{rank.name}</Badge>
+      </div>
+
+      {/* Reference-style stat row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 14 }}>
+        <DeskStat icon="wallet" label="Balance" value={`${fmt(S.balance)} BC`}
+          sub={<DeltaChip value={(S.txns || []).slice(0, 6).reduce((a, t) => a + t.amount, 0)} />}
+          onClick={() => { S.setTab('home'); S.go('wallet'); }} />
+        <DeskStat icon="spark" label="Activity" value={fmt(S.activityCoins)} tone="var(--green)"
+          sub={`earn rate ${rank.earn}`} />
+        <DeskStat icon="pool" label="Active projects" value={(S.workspaces || []).filter((w) => w.stage < 4).length} tone="var(--blue)"
+          sub={`${(S.workspaces || []).length} total`} onClick={() => S.setTab('projects')} />
+        <DeskStat icon="lock" label="Escrow held" value={`${fmt((S.workspaces || []).reduce((a, w) => a + Math.max(0, (w.budget || 0) - (w.escrowReleased || 0)), 0))} BC`} tone="var(--purple)"
+          sub="releases on milestones" />
       </div>
 
       {/* Hero row: wallet + camp today */}
@@ -148,10 +215,10 @@ function DesktopHome({ S }) {
           <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--gold)' }}>BeingCoin balance</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, margin: '10px 0 4px' }}>
             <CoinMark size={44} glow />
-            <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 58, color: 'var(--text)', lineHeight: 0.95 }}>{fmt(S.balance)}</span>
+            <span style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 44, color: 'var(--text)', lineHeight: 0.95 }}>{fmt(S.balance)}</span>
             <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
               <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 9.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--dim)' }}>Earn</div>
-              <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 24, color: 'var(--gold)' }}>{rank.earn}</div>
+              <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 19, color: 'var(--gold)' }}>{rank.earn}</div>
             </div>
           </div>
           <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12.5, color: 'var(--muted)', margin: '8px 0 10px' }}>
@@ -160,6 +227,9 @@ function DesktopHome({ S }) {
           <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
             <Btn variant="primary" icon="plus" onClick={() => { S.setTab('home'); S.go('wallet'); S.go('buy'); }}>Buy coins</Btn>
             <Btn variant="ghost" icon="wallet" onClick={() => { S.setTab('home'); S.go('wallet'); }}>Wallet</Btn>
+          </div>
+          <div style={{ margin: '16px -8px -8px' }}>
+            <AreaChart data={balanceSeries(S)} id="bal-home" h={96} />
           </div>
         </DeskCard>
 
@@ -248,7 +318,7 @@ function DesktopShowcase({ S }) {
     <div style={{ animation: 'screenIn .3s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20 }}>
         <div>
-          <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 34, color: 'var(--text)', lineHeight: 1 }}>SHOWCASE</div>
+          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 25, color: 'var(--text)', lineHeight: 1 }}>SHOWCASE</div>
           <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Case studies, work & theory from the Camp</div>
         </div>
         <div style={{ marginLeft: 'auto' }}>
@@ -282,7 +352,7 @@ function DesktopProjects({ S }) {
     <div style={{ animation: 'screenIn .3s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20 }}>
         <div>
-          <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 34, color: 'var(--text)', lineHeight: 1 }}>PROJECTS</div>
+          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 25, color: 'var(--text)', lineHeight: 1 }}>PROJECTS</div>
           <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Your workspaces and open work in the Pool</div>
         </div>
         <div style={{ marginLeft: 'auto' }}>
@@ -337,7 +407,7 @@ function DesktopWallet({ S }) {
     <div style={{ animation: 'screenIn .3s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20 }}>
         <div>
-          <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 34, color: 'var(--text)', lineHeight: 1 }}>WALLET</div>
+          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 25, color: 'var(--text)', lineHeight: 1 }}>WALLET</div>
           <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>BeingCoin — earned by making, spent in the Camp</div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
@@ -351,8 +421,12 @@ function DesktopWallet({ S }) {
           <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--gold)' }}>Balance</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 10 }}>
             <CoinMark size={46} glow />
-            <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 60, color: 'var(--text)', lineHeight: 0.95 }}>{fmt(S.balance)}</span>
+            <span style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 46, color: 'var(--text)', lineHeight: 0.95 }}>{fmt(S.balance)}</span>
             <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 14, color: 'var(--gold)' }}>BC</span>
+            <span style={{ marginLeft: 'auto' }}><DeltaChip value={(S.txns || []).slice(0, 6).reduce((a, t) => a + t.amount, 0)} /></span>
+          </div>
+          <div style={{ margin: '14px -8px -8px' }}>
+            <AreaChart data={balanceSeries(S)} id="bal-wallet" h={110} />
           </div>
         </DeskCard>
         <DeskCard>
@@ -388,7 +462,7 @@ function DesktopStore({ S }) {
     <div style={{ animation: 'screenIn .3s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
         <div>
-          <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 34, color: 'var(--text)', lineHeight: 1 }}>THE STORE</div>
+          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 25, color: 'var(--text)', lineHeight: 1 }}>THE STORE</div>
           <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Priced in BeingCoin</div>
         </div>
         <div style={{ marginLeft: 'auto' }}>
@@ -426,7 +500,7 @@ function DesktopYou({ S }) {
   return (
     <div style={{ animation: 'screenIn .3s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20 }}>
-        <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 34, color: 'var(--text)', lineHeight: 1 }}>YOU</div>
+        <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 25, color: 'var(--text)', lineHeight: 1 }}>YOU</div>
         <div style={{ marginLeft: 'auto' }}>
           <Btn variant="ghost" icon="user" onClick={() => S.openSheet('editProfile')}>Edit profile</Btn>
         </div>
@@ -437,7 +511,7 @@ function DesktopYou({ S }) {
           <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
             <div style={{ width: 66, height: 66, borderRadius: 20, background: 'var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, fontSize: 24, color: '#1a1407', flexShrink: 0 }}>{S.user.initials}</div>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 30, color: 'var(--text)', lineHeight: 1 }}>{S.user.name}</div>
+              <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 23, color: 'var(--text)', lineHeight: 1 }}>{S.user.name}</div>
               <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13.5, color: 'var(--muted)', marginTop: 5 }}>{p.headline || 'Member of the Camp'}</div>
               <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10.5, color: 'var(--dim)', marginTop: 5 }}>{p.city || 'BeingCamp'}{p.since ? ` · since ${p.since}` : ''}</div>
             </div>
@@ -488,7 +562,7 @@ function DesktopPrograms({ S }) {
     <div style={{ animation: 'screenIn .3s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20 }}>
         <div>
-          <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 34, color: 'var(--text)', lineHeight: 1 }}>PROGRAMS</div>
+          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 25, color: 'var(--text)', lineHeight: 1 }}>PROGRAMS</div>
           <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Workshops & sessions at the Camp</div>
         </div>
         <div style={{ marginLeft: 'auto' }}>
@@ -527,13 +601,13 @@ function DesktopLeaders({ S }) {
   return (
     <div style={{ animation: 'screenIn .3s ease' }}>
       <div style={{ marginBottom: 20 }}>
-        <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 34, color: 'var(--text)', lineHeight: 1 }}>LEADERS</div>
+        <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 25, color: 'var(--text)', lineHeight: 1 }}>LEADERS</div>
         <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Top of the Camp — ranked by activity coins earned</div>
       </div>
       <DeskCard style={{ padding: '4px 20px' }}>
         {list.map((l, i, a) => (
           <div key={l.rank} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 0', borderBottom: i < a.length - 1 ? '1px solid var(--line)' : 'none', background: l.you ? 'var(--gold-dim)' : 'transparent', margin: l.you ? '0 -20px' : 0, paddingLeft: l.you ? 20 : 0, paddingRight: l.you ? 20 : 0, borderRadius: l.you ? 12 : 0 }}>
-            <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, color: l.rank <= 3 ? 'var(--gold)' : 'var(--dim)', width: 30 }}>{l.rank}</span>
+            <span style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 17, color: l.rank <= 3 ? 'var(--gold)' : 'var(--dim)', width: 30 }}>{l.rank}</span>
             <span style={{ width: 34, height: 34, borderRadius: 11, background: 'var(--panel)', border: '1px solid var(--line2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, fontSize: 12, color: 'var(--muted)' }}>{l.init}</span>
             <span style={{ flex: 1, fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: l.you ? 800 : 600, fontSize: 14.5, color: 'var(--text)' }}>{l.name}{l.you ? ' · you' : ''}</span>
             <Badge tone={l.tier === 'OG' ? 'gold' : l.tier === 'Loyal' ? 'purple' : 'grey'}>{l.tier}</Badge>
@@ -550,7 +624,7 @@ function DesktopZones({ S }) {
   return (
     <div style={{ animation: 'screenIn .3s ease' }}>
       <div style={{ marginBottom: 20 }}>
-        <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 34, color: 'var(--text)', lineHeight: 1 }}>ZONES</div>
+        <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 25, color: 'var(--text)', lineHeight: 1 }}>ZONES</div>
         <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Check in as you move through the space</div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
@@ -560,7 +634,7 @@ function DesktopZones({ S }) {
             <DeskCard key={z.id} onClick={() => S.openSheet('checkin', { zone: z })} style={{ opacity: locked ? 0.55 : 1 }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
                 <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'var(--dim)' }}>{z.n}</span>
-                <span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, color: 'var(--text)' }}>{z.name}</span>
+                <span style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 17, color: 'var(--text)' }}>{z.name}</span>
                 <span style={{ marginLeft: 'auto' }}><Badge tone={locked ? 'grey' : 'gold'}>{z.layer}</Badge></span>
               </div>
               <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12.5, color: 'var(--muted)', margin: '8px 0 10px' }}>{z.desc}</div>
@@ -581,7 +655,7 @@ function DesktopOrders({ S }) {
   return (
     <div style={{ animation: 'screenIn .3s ease' }}>
       <div style={{ marginBottom: 20 }}>
-        <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 34, color: 'var(--text)', lineHeight: 1 }}>ORDERS</div>
+        <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 25, color: 'var(--text)', lineHeight: 1 }}>ORDERS</div>
         <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Purchases & tracking</div>
       </div>
       {(S.orders || []).length === 0 ? (
@@ -614,7 +688,7 @@ function DesktopNotifications({ S }) {
     <div style={{ animation: 'screenIn .3s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20 }}>
         <div>
-          <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 34, color: 'var(--text)', lineHeight: 1 }}>NOTIFICATIONS</div>
+          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 25, color: 'var(--text)', lineHeight: 1 }}>NOTIFICATIONS</div>
           <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>{S.unreadCount ? `${S.unreadCount} unread` : 'All caught up'}</div>
         </div>
         <div style={{ marginLeft: 'auto' }}>
@@ -694,7 +768,7 @@ function DesktopAdmin({ S }) {
     <div style={{ animation: 'screenIn .3s ease', opacity: busy ? 0.6 : 1 }}>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20 }}>
         <div>
-          <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 34, color: 'var(--text)', lineHeight: 1 }}>ADMIN</div>
+          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 25, color: 'var(--text)', lineHeight: 1 }}>ADMIN</div>
           <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Members, coins, ranks & briefs</div>
         </div>
         <div style={{ marginLeft: 'auto' }}>

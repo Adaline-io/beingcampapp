@@ -1,23 +1,32 @@
 /* BeingCamp — global tokens + base styles (extracted from the original design). */
 
+/* Design tokens — see DESIGN.md. Reference register: refined dark SaaS
+   (quiet near-black ground, hairline cards, numbers first, gold used the way
+   the reference uses its accent: sparingly). */
 :root {
-  --bg: #0b0b0c;
-  --bg-bar: rgba(13, 13, 14, 0.82);
-  --deep: #131314;
-  --surface: #161617;
-  --panel: #1e1e20;
-  --line: rgba(255, 255, 255, 0.07);
-  --line2: rgba(255, 255, 255, 0.13);
-  --text: #f2efe9;
-  --muted: #8d8980;
-  --dim: #5c5953;
+  --bg: #0a0a0b;
+  --bg-bar: rgba(12, 12, 14, 0.85);
+  --deep: #0e0e10;
+  --surface: #141417;
+  --panel: #1b1b1f;
+  --line: rgba(255, 255, 255, 0.06);
+  --line2: rgba(255, 255, 255, 0.1);
+  --text: #f2f2f4;
+  --muted: #8f8f97;
+  --dim: #5d5d65;
   --gold: #c9a84c;
   --gold-line: rgba(201, 168, 76, 0.3);
   --gold-dim: rgba(201, 168, 76, 0.12);
-  --green: #4cc97a;
-  --blue: #5b9bd6;
-  --purple: #9b7fd4;
-  --red: #d2564f;
+  --green: #3ecf7a;
+  --blue: #5f9df5;
+  --purple: #9b87e0;
+  --red: #e05252;
+  /* chart categorical set (charts may be vivid; chrome stays monochrome) */
+  --c1: #c9a84c;
+  --c2: #3ecf7a;
+  --c3: #5f9df5;
+  --c4: #9b87e0;
+  --c5: #e2639b;
 }
 
 * {
