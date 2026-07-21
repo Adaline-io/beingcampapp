@@ -95,6 +95,24 @@ button.tap:active {
     filter: brightness(1.08);
   }
 }
+/* Pressable cards: a softer 2px bevel version of the same physicality. */
+.npc {
+  cursor: pointer;
+  box-shadow: 2px 2px 0 0 rgba(0, 0, 0, 0.45);
+  transition:
+    transform 0.09s ease,
+    box-shadow 0.09s ease,
+    filter 0.15s ease;
+}
+.npc:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.45);
+}
+@media (hover: hover) and (pointer: fine) {
+  .npc:hover {
+    filter: brightness(1.07);
+  }
+}
 
 @keyframes screenIn {
   from {

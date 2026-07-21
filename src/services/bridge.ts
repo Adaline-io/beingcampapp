@@ -188,7 +188,7 @@ export const backend = {
   async loadCatalog(): Promise<Record<string, unknown> | null> {
     if (!isBackendEnabled) return null;
     try {
-      const [packs, products, services, briefs, pubs, workshops, zones, leaders] =
+      const [packs, products, services, briefs, pubs, workshops, zones, leaders, challengeRows] =
         await Promise.all([
           data.getCoinPacks(),
           data.getProducts(),
@@ -198,6 +198,15 @@ export const backend = {
           data.getWorkshops().catch(() => []),
           data.getZones().catch(() => []),
           data.getLeaders().catch(() => []),
+          (async () => {
+            const { requireSupabase } = await import('../lib/supabase');
+            const { data: rows } = await requireSupabase()
+              .from('challenges')
+              .select('*, challenge_entries(count)')
+              .eq('status', 'open')
+              .order('created_at', { ascending: false });
+            return rows ?? [];
+          })().catch(() => []),
         ]);
       if (!packs.length && !products.length) return null;
       const zoneName = new Map(
@@ -302,7 +311,21 @@ export const backend = {
         you: me !== null && String(p.id) === me,
       }));
 
+      const uiChallenges = (challengeRows as Array<Record<string, unknown>>).map((c) => ({
+        id: String(c.id),
+        title: String(c.title),
+        industry: String(c.industry),
+        reward: Number(c.reward),
+        deadline: String(c.deadline_text),
+        tag: String(c.tag),
+        desc: String(c.description ?? ''),
+        entries: Number(
+          ((c.challenge_entries as Array<{ count?: number }>) ?? [])[0]?.count ?? 0
+        ),
+      }));
+
       return {
+        challenges: uiChallenges,
         packs: uiPacks,
         products: uiProducts,
         storeCats,
@@ -511,6 +534,28 @@ export const backend = {
       .from('workshop_rsvps')
       .insert({ workshop_id: workshopId, profile_id: userId });
     if (error && !String(error.message).includes('duplicate')) throw error;
+  },
+
+  /** Enter a challenge (uuid ids only — demo ids stay local). */
+  async syncJoinChallenge(challengeId: string): Promise<void> {
+    if (!isBackendEnabled) return;
+    const userId = await currentUserId();
+    if (!userId || !/^[0-9a-f-]{36}$/i.test(challengeId)) return;
+    const { requireSupabase } = await import('../lib/supabase');
+    const { error } = await requireSupabase()
+      .from('challenge_entries')
+      .insert({ challenge_id: challengeId, profile_id: userId });
+    if (error && !String(error.message).includes('duplicate')) throw error;
+  },
+
+  /** Award a challenge pot to a member (admin-gated in SQL). */
+  async adminAwardChallenge(challengeId: string, profileId: string): Promise<void> {
+    const { requireSupabase } = await import('../lib/supabase');
+    const { error } = await requireSupabase().rpc('award_challenge', {
+      p_challenge: challengeId,
+      p_profile: profileId,
+    });
+    if (error) throw error;
   },
 
   /* --------------------------------- Admin --------------------------------- */

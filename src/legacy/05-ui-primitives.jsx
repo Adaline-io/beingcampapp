@@ -93,10 +93,10 @@ function Eyebrow({ children, color = 'var(--gold)', line = false, style }) {
 // ── Card ────────────────────────────────────────────────────────────
 function Card({ children, pad = 16, style, onClick, glow = false, hl = false }) {
   return (
-    <div onClick={onClick} className={onClick ? 'tap' : ''} style={{
+    <div onClick={onClick} className={onClick ? 'npc' : ''} style={{
       background: hl ? 'linear-gradient(160deg, rgba(201,168,76,0.10), rgba(201,168,76,0.02))' : 'var(--surface)',
       border: `1px solid ${hl ? 'var(--gold-line)' : 'var(--line)'}`,
-      borderRadius: 18, padding: pad,
+      borderRadius: 12, padding: pad,
       boxShadow: glow ? '0 0 0 1px var(--gold-line), 0 8px 30px rgba(201,168,76,0.08)' : 'none',
       cursor: onClick ? 'pointer' : 'default', ...style,
     }}>{children}</div>

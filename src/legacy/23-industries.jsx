@@ -141,7 +141,7 @@ function ChallengesScreen({ S }) {
       <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12.5, color: 'var(--muted)', margin: '-6px 0 16px', lineHeight: 1.5 }}>
         Weekly prompts across every craft. Join free, submit before the deadline, winners take the pot at Crit Night.
       </div>
-      {forYouFirst(CHALLENGES, S.myIndustries, (c) => c.industry).map((c) => <ChallengeCard key={c.id} S={S} c={c} />)}
+      {forYouFirst(S.challenges || CHALLENGES, S.myIndustries, (c) => c.industry).map((c) => <ChallengeCard key={c.id} S={S} c={c} />)}
     </div>
   );
 }
@@ -156,7 +156,7 @@ function DesktopChallenges({ S }) {
         </div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
-        {forYouFirst(CHALLENGES, S.myIndustries, (c) => c.industry).map((c) => <ChallengeCard key={c.id} S={S} c={c} />)}
+        {forYouFirst(S.challenges || CHALLENGES, S.myIndustries, (c) => c.industry).map((c) => <ChallengeCard key={c.id} S={S} c={c} />)}
       </div>
     </div>
   );

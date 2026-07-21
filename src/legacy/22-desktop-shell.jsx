@@ -109,12 +109,12 @@ function DesktopSidebar({ S }) {
 // ── Desktop-native Home: a real dashboard that uses the width ──────────
 function DeskCard({ children, style, onClick, hl }) {
   return (
-    <div className={onClick ? 'tap' : ''} onClick={onClick} style={{
+    <div className={onClick ? 'npc' : ''} onClick={onClick} style={{
       background: hl
         ? 'radial-gradient(120% 180% at 10% 0%, var(--gold-dim), rgba(201,168,76,0.02) 60%), var(--surface)'
         : 'var(--surface)',
       border: '1px solid ' + (hl ? 'var(--gold-line)' : 'var(--line)'),
-      borderRadius: 18, padding: 20, cursor: onClick ? 'pointer' : 'default', ...style,
+      borderRadius: 12, padding: 20, cursor: onClick ? 'pointer' : 'default', ...style,
     }}>{children}</div>
   );
 }
@@ -791,6 +791,29 @@ function DesktopAdmin({ S }) {
             <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 12.5, color: 'var(--gold)', minWidth: 80, textAlign: 'right' }}>{fmt(m.balance)} BC</span>
             <Btn variant="outline" size="sm" onClick={() => grant(m)}>Grant</Btn>
             <Btn variant="ghost" size="sm" onClick={() => setRank(m)}>Rank</Btn>
+          </div>
+        ))}
+      </DeskCard>
+
+      <DeskSectionHead label="Open challenges" />
+      <DeskCard style={{ padding: '4px 20px', marginBottom: 12 }}>
+        {(S.challenges || []).map((c, i, a) => (
+          <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: i < a.length - 1 ? '1px solid var(--line)' : 'none' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>{c.title}</div>
+              <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'var(--dim)', marginTop: 2 }}>{c.tag} · {c.entries} entries · {c.deadline} left</div>
+            </div>
+            <BC amount={c.reward} size={13} color="var(--gold)" />
+            {/^[0-9a-f-]{36}$/i.test(c.id) && (
+              <Btn variant="primary" size="sm" onClick={async () => {
+                const name = prompt('Award the pot to which member? (exact name)');
+                if (!name) return;
+                const m = (members || []).find((x) => String(x.name).toLowerCase() === name.toLowerCase());
+                if (!m) { S.toast({ msg: 'No member by that name', icon: 'wallet' }); return; }
+                try { await BE.adminAwardChallenge(c.id, m.id); S.toast({ msg: `${c.reward} BC → ${m.name} 🏆`, coin: c.reward }); reload(); }
+                catch (e) { S.toast({ msg: 'Award failed — apply migration 0007?', icon: 'wallet' }); console.warn(e); }
+              }}>Award</Btn>
+            )}
           </div>
         ))}
       </DeskCard>
