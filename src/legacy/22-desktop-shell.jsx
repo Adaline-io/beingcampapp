@@ -15,6 +15,7 @@ const DESK_NAV_MORE = [
   { screen: 'store', icon: 'bag', label: 'The Store' },
   { screen: 'services', icon: 'briefcase', label: 'Services' },
   { screen: 'scan', icon: 'scan', label: 'Zones' },
+  { screen: 'challenges', icon: 'trophy', label: 'Challenges' },
   { screen: 'programs', icon: 'calendar', label: 'Programs' },
   { screen: 'leaders', icon: 'trophy', label: 'Leaders' },
   { screen: 'orders', icon: 'gift', label: 'Orders' },
@@ -876,7 +877,7 @@ function BeingCampDesktop({ t }) {
   // Tabs and key sub-screens get desktop-native wide views; everything else
   // falls back to the phone column + context rail.
   const wideTabs = { home: DesktopHome, showcase: DesktopShowcase, projects: DesktopProjects, profile: DesktopYou };
-  const wideSubs = { wallet: DesktopWallet, store: DesktopStore, programs: DesktopPrograms, leaders: DesktopLeaders, scan: DesktopZones, orders: DesktopOrders, notifications: DesktopNotifications, admin: DesktopAdmin };
+  const wideSubs = { wallet: DesktopWallet, store: DesktopStore, programs: DesktopPrograms, leaders: DesktopLeaders, scan: DesktopZones, orders: DesktopOrders, notifications: DesktopNotifications, admin: DesktopAdmin, challenges: DesktopChallenges };
   const WideView = S.topScreen ? wideSubs[S.topScreen] : wideTabs[S.tab];
 
   return (

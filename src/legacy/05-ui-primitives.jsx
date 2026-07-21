@@ -132,20 +132,22 @@ function Btn({ children, onClick, variant = 'primary', full = false, size = 'md'
   const [py, px, fs] = sizes[size] || sizes.md;
   const base = {
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-    fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 600, fontSize: fs,
-    padding: `${py}px ${px}px`, borderRadius: 13, border: '1px solid transparent',
+    fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: fs,
+    padding: `${py}px ${px}px`, borderRadius: 8, border: '1px solid transparent',
     width: full ? '100%' : 'auto', cursor: disabled ? 'not-allowed' : 'pointer',
-    opacity: disabled ? 0.4 : 1, letterSpacing: '0.01em', transition: 'transform .12s ease, filter .15s ease',
+    opacity: disabled ? 0.4 : 1, letterSpacing: '0.01em',
   };
+  // NeoPOP-style bevel: each variant carries a hard edge color; the .np CSS
+  // presses the face into the edge on tap (CRED-inspired physicality).
   const variants = {
-    primary: { background: 'var(--gold)', color: '#1a1407', borderColor: 'var(--gold)' },
-    dark:    { background: 'var(--text)', color: 'var(--bg)' },
-    outline: { background: 'transparent', color: 'var(--text)', borderColor: 'var(--line2)' },
-    ghost:   { background: 'var(--panel)', color: 'var(--text)', borderColor: 'var(--line)' },
-    danger:  { background: 'rgba(210,86,79,0.12)', color: 'var(--red)', borderColor: 'rgba(210,86,79,0.3)' },
+    primary: { background: 'var(--gold)', color: '#1a1407', '--np-edge': '#77601f' },
+    dark:    { background: 'var(--text)', color: 'var(--bg)', '--np-edge': '#6e6e76' },
+    outline: { background: 'var(--surface)', color: 'var(--text)', borderColor: 'var(--line2)', '--np-edge': 'rgba(0,0,0,0.55)' },
+    ghost:   { background: 'var(--panel)', color: 'var(--text)', borderColor: 'var(--line)', '--np-edge': 'rgba(0,0,0,0.5)' },
+    danger:  { background: 'rgba(210,86,79,0.12)', color: 'var(--red)', borderColor: 'rgba(210,86,79,0.3)', '--np-edge': 'rgba(92,31,28,0.8)' },
   };
   return (
-    <button className="tap" disabled={disabled} onClick={disabled ? undefined : onClick} style={{ ...base, ...variants[variant], ...style }}>
+    <button className={disabled ? 'tap' : 'np'} disabled={disabled} onClick={disabled ? undefined : onClick} style={{ ...base, ...variants[variant], ...style }}>
       {icon && <Icon name={icon} size={fs + 3} stroke={2.2} />}
       {children}
     </button>

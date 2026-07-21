@@ -76,6 +76,26 @@ button.tap:active {
   transform: scale(0.96);
 }
 
+/* NeoPOP bevel (CRED-inspired): a hard edge under the face; pressing sinks
+   the face into the edge. --np-edge is set per button variant inline. */
+.np {
+  position: relative;
+  box-shadow: 3px 3px 0 0 var(--np-edge, rgba(0, 0, 0, 0.5));
+  transition:
+    transform 0.09s ease,
+    box-shadow 0.09s ease,
+    filter 0.15s ease;
+}
+.np:active {
+  transform: translate(3px, 3px);
+  box-shadow: 0 0 0 0 var(--np-edge, rgba(0, 0, 0, 0.5));
+}
+@media (hover: hover) and (pointer: fine) {
+  .np:hover {
+    filter: brightness(1.08);
+  }
+}
+
 @keyframes screenIn {
   from {
     opacity: 0;

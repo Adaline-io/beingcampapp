@@ -146,6 +146,7 @@ function MemberHome({ S }) {
         <QuickTile icon="calendar" label="Programs" sub="Workshops & learning" onClick={() => S.go('programs')} tone="var(--blue)" />
         <QuickTile icon="bag" label="The Store" sub="Drops & merch" onClick={() => S.go('store')} />
         <QuickTile icon="scan" label="Zones" sub="Check in · QR" onClick={() => S.go('scan')} tone="var(--green)" />
+        <QuickTile icon="trophy" label="Challenges" sub="Play & earn" onClick={() => S.go('challenges')} tone="var(--purple)" />
       </div>
 
       {/* Community pulse */}

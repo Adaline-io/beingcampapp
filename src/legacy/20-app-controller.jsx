@@ -35,12 +35,13 @@ function useBeingCamp(t) {
   const [profile, setProfile] = React.useState(saved.profile ?? (fresh ? null : DEFAULT_PROFILE));
   const [catalog, setCatalog] = React.useState(null); // live catalog from the DB (null → demo data)
   const [isAdmin, setIsAdmin] = React.useState(false); // founder/admin flag from the profile row
+  const [joinedChallenges, setJoinedChallenges] = React.useState(saved.joinedChallenges ?? []);
   const [toastData, setToastData] = React.useState(null);
   const rankIndex = Math.max(0, Math.min(4, t.rankIndex ?? 1));
 
   React.useEffect(() => {
-    localStorage.setItem(PKEY, JSON.stringify({ entered, balance, activityCoins, txns, appliedWork, orders, workspaces, publications, notifs, attending, programs, profile }));
-  }, [entered, balance, activityCoins, txns, appliedWork, orders, workspaces, publications, notifs, attending, programs, profile]);
+    localStorage.setItem(PKEY, JSON.stringify({ entered, balance, activityCoins, txns, appliedWork, orders, workspaces, publications, notifs, attending, programs, profile, joinedChallenges }));
+  }, [entered, balance, activityCoins, txns, appliedWork, orders, workspaces, publications, notifs, attending, programs, profile, joinedChallenges]);
 
   // Live mode: the public catalog (packs, store, services, briefs) comes from
   // the database — no session needed; demo catalog stays as the fallback.
@@ -117,9 +118,21 @@ function useBeingCamp(t) {
     products: (catalog && catalog.products) || (typeof PRODUCTS !== 'undefined' ? PRODUCTS : []),
     storeCats: (catalog && catalog.storeCats) || (typeof STORE_CATS !== 'undefined' ? STORE_CATS : ['All']),
     services: (catalog && catalog.services) || (typeof SERVICES !== 'undefined' ? SERVICES : []),
-    openWork: (catalog && catalog.openWork) || (typeof OPEN_WORK !== 'undefined' ? OPEN_WORK : []),
+    openWork: (() => {
+      const raw = (catalog && catalog.openWork) || (typeof OPEN_WORK !== 'undefined' ? OPEN_WORK : []);
+      // Matched-to-your-craft briefs first — makers see their industry's work
+      // on top everywhere (Pool, home feed, rail).
+      const mine = (typeof industriesForProfile !== 'undefined') ? industriesForProfile(p) : [];
+      return (typeof forYouFirst !== 'undefined')
+        ? forYouFirst(raw, mine, (o) => (typeof CAT_TO_INDUSTRY !== 'undefined' && CAT_TO_INDUSTRY[o.cat]) || o.cat)
+        : raw;
+    })(),
+    myIndustries: (typeof industriesForProfile !== 'undefined') ? industriesForProfile(p) : [],
     leaders: (catalog && catalog.leaders && catalog.leaders.length ? catalog.leaders : null),
     isAdmin,
+    joinedChallenges,
+    joinChallenge: (c) => { setJoinedChallenges((p) => p.includes(c.id) ? p : [...p, c.id]); toast({ msg: `Joined · ${c.title}`, icon: 'trophy' }); },
+    submitChallenge: (c) => { setSheet({ name: 'publish', payload: { challenge: c } }); toast({ msg: 'Publish your entry to submit', icon: 'arrowUR' }); },
     notifs, unreadCount: notifs.filter((n) => n.unread).length,
     markRead: (id) => setNotifs((p) => p.map((n) => n.id === id ? { ...n, unread: false } : n)),
     markAllRead: () => setNotifs((p) => p.map((n) => ({ ...n, unread: false }))),
@@ -155,14 +168,26 @@ function useBeingCamp(t) {
       }, ...p]);
       if (BE) mirror(BE.syncOrder({ item: product.name, source: product.source, bc: product.bc, tone: product.tone, type: product.type === 'physical' ? 'physical' : 'pass', stage: product.type === 'physical' ? 0 : 4 }));
     },
-    addPostedWork: ({ cat, budget }) => {
+    addPostedWork: ({ cat, budget, template }) => {
       const tempId = 'w' + Date.now();
       const title = 'Your new ' + cat.toLowerCase() + ' project';
-      const milestones = [
-        { name: 'Milestone 1', bc: Math.round(budget * 0.4), status: 'todo' },
-        { name: 'Milestone 2', bc: Math.round(budget * 0.35), status: 'todo' },
-        { name: 'Final delivery', bc: budget - Math.round(budget * 0.4) - Math.round(budget * 0.35), status: 'todo' },
-      ];
+      let milestones;
+      if (template && template.milestones) {
+        // Industry template: milestone plan scaled to the budget, last one absorbs rounding.
+        const ms = template.milestones;
+        let used = 0;
+        milestones = ms.map((m, i) => {
+          const bc = i === ms.length - 1 ? budget - used : Math.round(budget * m.pct);
+          used += bc;
+          return { name: m.name, bc, status: 'todo' };
+        });
+      } else {
+        milestones = [
+          { name: 'Milestone 1', bc: Math.round(budget * 0.4), status: 'todo' },
+          { name: 'Milestone 2', bc: Math.round(budget * 0.35), status: 'todo' },
+          { name: 'Final delivery', bc: budget - Math.round(budget * 0.4) - Math.round(budget * 0.35), status: 'todo' },
+        ];
+      }
       if (BE) {
         BE.syncProject({ title, cat, budget, milestones })
           .then((w) => { if (w) setWorkspaces((prev) => prev.map((x) => x.id === tempId ? { ...w, shortlist: x.shortlist, chat: x.chat } : x)); })
@@ -217,6 +242,7 @@ function CurrentScreen({ S }) {
     case 'leaders': return <LeadersScreen S={S} />;
     case 'programs': return <ProgramsScreen S={S} />;
     case 'notifications': return <NotificationsScreen S={S} />;
+    case 'challenges': return <ChallengesScreen S={S} />;
     case 'referrals': return <ReferralsScreen S={S} />;
     case 'orders': return <OrdersScreen S={S} />;
     case 'orderDetail': return <OrderDetailScreen S={S} />;

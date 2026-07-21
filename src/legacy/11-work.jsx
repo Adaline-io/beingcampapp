@@ -155,13 +155,17 @@ function ApplyWorkSheet({ S, work, onClose }) {
 // ── POST WORK (multi-step) ──────────────────────────────────────────
 function PostWorkSheet({ S, onClose }) {
   const [step, setStep] = React.useState(0); // 0 details, 1 fund, 2 done
-  const [cat, setCat] = React.useState('Branding');
-  const [budget, setBudget] = React.useState(2000);
+  const [industryId, setIndustryId] = React.useState((S.myIndustries && S.myIndustries[0]) || 'design');
+  const [size, setSize] = React.useState('small');
+  const ind = industryOf(industryId);
+  const presets = size === 'big' ? [2400, 5000, 9000, 15000] : [300, 600, 1200, 2000];
+  const [budget, setBudget] = React.useState(1200);
+  const cat = ind.name;
   const afford = S.balance >= budget;
   const fund = () => {
     if (!afford) { onClose(); S.go('buy'); S.toast({ msg: 'Top up to fund the escrow', icon: 'wallet' }); return; }
     S.spend(budget, 'Project escrow funded', 'pool');
-    S.addPostedWork({ cat, budget });
+    S.addPostedWork({ cat, budget, template: ind });
     setStep(2);
   };
   if (step === 2) {
@@ -186,7 +190,7 @@ function PostWorkSheet({ S, onClose }) {
         <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginBottom: 18, lineHeight: 1.5 }}>Your coins are locked safely and released to the team only as milestones are approved by you.</div>
         <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 10 }}>Project budget</div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-          {[900, 1500, 2400, 5000].map((a) => (
+          {presets.map((a) => (
             <button key={a} className="tap" onClick={() => setBudget(a)} style={{ flex: 1, cursor: 'pointer', padding: '13px 4px', borderRadius: 12, border: `1px solid ${budget === a ? 'var(--gold)' : 'var(--line)'}`, background: budget === a ? 'var(--gold-dim)' : 'var(--surface)', fontFamily: 'Space Mono, monospace', fontWeight: 700, fontSize: 13, color: budget === a ? 'var(--gold)' : 'var(--muted)' }}>{a >= 1000 ? (a/1000) + 'k' : a}</button>
           ))}
         </div>
@@ -214,12 +218,39 @@ function PostWorkSheet({ S, onClose }) {
       <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 28, color: 'var(--text)', marginBottom: 6 }}>POST WORK</div>
       <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginBottom: 18, lineHeight: 1.5 }}>Describe what you need. Authority scopes it and builds you a team — you stay in control.</div>
       <Field label="What do you need?" value="" placeholder="e.g. Rebrand for our new café" />
-      <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 8 }}>Category</div>
-      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 14 }}>
-        {POST_CATS.map((c) => (
-          <button key={c} className="tap" onClick={() => setCat(c)} style={{ cursor: 'pointer', fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 600, fontSize: 12.5, padding: '8px 13px', borderRadius: 999, border: `1px solid ${cat === c ? 'var(--gold)' : 'var(--line)'}`, background: cat === c ? 'var(--gold-dim)' : 'var(--surface)', color: cat === c ? 'var(--gold)' : 'var(--muted)' }}>{c}</button>
+      <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 8 }}>Industry</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7, marginBottom: 14 }}>
+        {INDUSTRIES.map((x) => (
+          <button key={x.id} className="tap" onClick={() => setIndustryId(x.id)} style={{ cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8, padding: '10px 11px', borderRadius: 10, border: `1px solid ${industryId === x.id ? 'var(--gold)' : 'var(--line)'}`, background: industryId === x.id ? 'var(--gold-dim)' : 'var(--surface)' }}>
+            <Icon name={x.icon} size={15} color={industryId === x.id ? 'var(--gold)' : x.tone} />
+            <span style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 12, color: industryId === x.id ? 'var(--gold)' : 'var(--text)' }}>{x.name}</span>
+          </button>
         ))}
       </div>
+      <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 8 }}>Project size</div>
+      <div style={{ display: 'flex', gap: 7, marginBottom: 14 }}>
+        {[['small', 'Small gig', ind.sizes.small], ['big', 'Big production', ind.sizes.big]].map(([id, label, sub]) => (
+          <button key={id} className="tap" onClick={() => { setSize(id); setBudget(id === 'big' ? 5000 : 1200); }} style={{ flex: 1, cursor: 'pointer', textAlign: 'left', padding: '11px 12px', borderRadius: 10, border: `1px solid ${size === id ? 'var(--gold)' : 'var(--line)'}`, background: size === id ? 'var(--gold-dim)' : 'var(--surface)' }}>
+            <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 12.5, color: size === id ? 'var(--gold)' : 'var(--text)' }}>{label}</div>
+            <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 10.5, color: 'var(--muted)', marginTop: 2 }}>{sub}</div>
+          </button>
+        ))}
+      </div>
+      <Card pad={14} style={{ marginBottom: 14 }}>
+        <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 8 }}>This project will need</div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+          {ind.roles.map((r) => <Badge key={r}>{r}</Badge>)}
+        </div>
+        {ind.requirements.map((r) => (
+          <div key={r} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0' }}>
+            <Icon name="check" size={13} color="var(--green)" />
+            <span style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12.5, color: 'var(--muted)' }}>{r}</span>
+          </div>
+        ))}
+        <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 9.5, color: 'var(--dim)', marginTop: 8 }}>
+          Milestones: {ind.milestones.map((m) => m.name).join(' → ')}
+        </div>
+      </Card>
       <Field label="Details" value="" placeholder="Goals, scope, references, timeline…" />
       <Btn variant="primary" size="lg" full icon="arrowR" onClick={() => setStep(1)}>Continue to escrow</Btn>
     </div>
