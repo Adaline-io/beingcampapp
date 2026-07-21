@@ -558,6 +558,86 @@ export const backend = {
     if (error) throw error;
   },
 
+  /** Post a new challenge (admin RLS). */
+  async adminAddChallenge(input: {
+    title: string; industry: string; reward: number; deadline: string; tag: string; desc: string;
+  }): Promise<void> {
+    const { requireSupabase } = await import('../lib/supabase');
+    const { error } = await requireSupabase().from('challenges').insert({
+      title: input.title,
+      industry: input.industry,
+      reward: Math.round(input.reward),
+      deadline_text: input.deadline,
+      tag: input.tag,
+      description: input.desc,
+    });
+    if (error) throw error;
+  },
+
+  /** Post a new workshop/program (staff or admin RLS). */
+  async adminAddWorkshop(input: {
+    title: string; host: string; when: string; zoneId: string; cost: number; seats: number; tag: string; desc: string;
+  }): Promise<void> {
+    const { requireSupabase } = await import('../lib/supabase');
+    const { error } = await requireSupabase().from('workshops').insert({
+      title: input.title,
+      host: input.host,
+      when_text: input.when,
+      date_text: 'soon',
+      zone_id: input.zoneId || null,
+      cost: Math.round(input.cost),
+      seats: Math.round(input.seats),
+      tag: input.tag,
+      description: input.desc,
+    });
+    if (error) throw error;
+  },
+
+  /** Toggle a member's staff flag (admin profile-update RLS, 0008). */
+  async adminSetStaff(profileId: string, isStaff: boolean): Promise<void> {
+    const { requireSupabase } = await import('../lib/supabase');
+    const { error } = await requireSupabase()
+      .from('profiles')
+      .update({ is_staff: isStaff })
+      .eq('id', profileId);
+    if (error) throw error;
+  },
+
+  /** The five weekly numbers, counted in parallel. */
+  async adminMetrics(): Promise<Record<string, number>> {
+    const { requireSupabase } = await import('../lib/supabase');
+    const sb = requireSupabase();
+    const count = async (table: string, filter?: (q: any) => any) => {
+      let q = sb.from(table).select('*', { count: 'exact', head: true });
+      if (filter) q = filter(q);
+      const { count: n } = await q;
+      return n ?? 0;
+    };
+    const [members, checkins, delivered, entries, txnRows] = await Promise.all([
+      count('profiles'),
+      count('zone_checkins'),
+      count('projects', (q) => q.eq('stage', 4)),
+      count('challenge_entries'),
+      sb.from('transactions').select('amount').then((r) => r.data ?? []),
+    ]);
+    const earned = (txnRows as Array<{ amount: number }>).filter((t) => t.amount > 0).reduce((a, t) => a + t.amount, 0);
+    const spent = (txnRows as Array<{ amount: number }>).filter((t) => t.amount < 0).reduce((a, t) => a - t.amount, 0);
+    return { members, checkins, delivered, entries, earned, spent };
+  },
+
+  /** Recent grant/payout ledger lines for the audit view (admin read, 0008). */
+  async adminAudit(): Promise<Array<Record<string, unknown>>> {
+    const { requireSupabase } = await import('../lib/supabase');
+    const { data: rows, error } = await requireSupabase()
+      .from('transactions')
+      .select('id, profile_id, label, amount, ref, created_at')
+      .in('ref', ['admin', 'ritual'])
+      .order('created_at', { ascending: false })
+      .limit(20);
+    if (error) throw error;
+    return rows ?? [];
+  },
+
   /* --------------------------------- Admin --------------------------------- */
 
   /** All members, newest first (profiles are public-read). */

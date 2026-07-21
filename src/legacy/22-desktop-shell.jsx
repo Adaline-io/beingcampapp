@@ -717,12 +717,17 @@ function DesktopNotifications({ S }) {
 function DesktopAdmin({ S }) {
   const BE = typeof window !== 'undefined' ? window.BeingCampBackend : null;
   const [members, setMembers] = React.useState(null);
+  const [metrics, setMetrics] = React.useState(null);
+  const [audit, setAudit] = React.useState([]);
   const [busy, setBusy] = React.useState(false);
   const RANK_NAMES = RANK_PERKS.map((r) => r.name);
 
   const reload = React.useCallback(() => {
     if (!BE || !BE.enabled) return;
+    // One parallel sweep: members, the five numbers, and the audit trail.
     BE.adminListMembers().then(setMembers).catch((e) => { console.warn(e); S.toast({ msg: 'Could not load members', icon: 'wallet' }); });
+    if (BE.adminMetrics) BE.adminMetrics().then(setMetrics).catch(() => {});
+    if (BE.adminAudit) BE.adminAudit().then(setAudit).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   React.useEffect(() => { reload(); }, [reload]);
@@ -756,6 +761,37 @@ function DesktopAdmin({ S }) {
     setBusy(false);
   };
 
+  const addChallenge = async () => {
+    const title = prompt('Challenge title:'); if (!title) return;
+    const industry = prompt('Industry — design / tech / film / media / music / events / marketing:', 'design') || 'design';
+    const reward = parseInt(prompt('Reward pot (BC):', '300') || '0', 10);
+    const deadline = prompt('Deadline (e.g. "7 days"):', '7 days') || '7 days';
+    const desc = prompt('One-line brief:') || '';
+    setBusy(true);
+    try { await BE.adminAddChallenge({ title, industry, reward, deadline, tag: 'Weekly', desc }); S.toast({ msg: 'Challenge is live 🏁' }); }
+    catch (e) { S.toast({ msg: 'Post failed — apply migration 0007?', icon: 'wallet' }); console.warn(e); }
+    setBusy(false);
+  };
+  const addWorkshop = async () => {
+    const title = prompt('Program title:'); if (!title) return;
+    const host = prompt('Host name:', 'BeingCamp') || 'BeingCamp';
+    const when = prompt('When (e.g. "Sat · 4:00 PM"):', 'Sat · 4:00 PM') || 'Soon';
+    const zoneId = prompt('Zone — front / camp / room / den / stage / inner:', 'camp') || 'camp';
+    const cost = parseInt(prompt('Seat cost (BC, 0 = free):', '0') || '0', 10);
+    const seats = parseInt(prompt('Seats:', '12') || '12', 10);
+    const desc = prompt('One-line description:') || '';
+    setBusy(true);
+    try { await BE.adminAddWorkshop({ title, host, when, zoneId, cost, seats, tag: 'Session', desc }); S.toast({ msg: 'Program posted 📅' }); }
+    catch (e) { S.toast({ msg: 'Post failed', icon: 'wallet' }); console.warn(e); }
+    setBusy(false);
+  };
+  const toggleStaff = async (m) => {
+    setBusy(true);
+    try { await BE.adminSetStaff(m.id, !m.is_staff); S.toast({ msg: `${m.name} ${m.is_staff ? 'removed from' : 'added to'} staff` }); reload(); }
+    catch (e) { S.toast({ msg: 'Staff change failed — apply migration 0008?', icon: 'wallet' }); console.warn(e); }
+    setBusy(false);
+  };
+
   if (!S.isAdmin) {
     return (
       <DeskCard>
@@ -772,10 +808,22 @@ function DesktopAdmin({ S }) {
           <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 25, color: 'var(--text)', lineHeight: 1 }}>ADMIN</div>
           <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Members, coins, ranks & briefs</div>
         </div>
-        <div style={{ marginLeft: 'auto' }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <Btn variant="ghost" icon="calendar" onClick={addWorkshop}>Post program</Btn>
+          <Btn variant="ghost" icon="trophy" onClick={addChallenge}>Post challenge</Btn>
           <Btn variant="primary" icon="plus" onClick={addBrief}>Post a brief</Btn>
         </div>
       </div>
+
+      {metrics && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 8 }}>
+          <DeskStat icon="user" label="Members" value={metrics.members} sub="all time" />
+          <DeskStat icon="scan" label="Check-ins" value={metrics.checkins} tone="var(--green)" sub="all time" />
+          <DeskStat icon="wallet" label="BC earned" value={fmt(metrics.earned)} tone="var(--gold)" sub={`${fmt(metrics.spent)} spent`} />
+          <DeskStat icon="pool" label="Delivered" value={metrics.delivered} tone="var(--blue)" sub="projects" />
+          <DeskStat icon="trophy" label="Entries" value={metrics.entries} tone="var(--purple)" sub="challenges" />
+        </div>
+      )}
 
       <DeskSectionHead label={`Members${members ? ` · ${members.length}` : ''}`} action="Reload" onAction={reload} />
       <DeskCard style={{ padding: '4px 20px' }}>
@@ -787,10 +835,12 @@ function DesktopAdmin({ S }) {
               <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>{m.name || 'Unnamed'}</div>
               <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'var(--dim)', marginTop: 2 }}>{m.city || '—'} · joined {String(m.created_at).slice(0, 10)}</div>
             </div>
+            {m.is_staff && <Badge tone="blue">Staff</Badge>}
             <Badge tone="gold">{RANK_NAMES[m.rank_index] || 'Visitor'}</Badge>
             <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 12.5, color: 'var(--gold)', minWidth: 80, textAlign: 'right' }}>{fmt(m.balance)} BC</span>
             <Btn variant="outline" size="sm" onClick={() => grant(m)}>Grant</Btn>
             <Btn variant="ghost" size="sm" onClick={() => setRank(m)}>Rank</Btn>
+            <Btn variant="ghost" size="sm" onClick={() => toggleStaff(m)}>{m.is_staff ? 'Unstaff' : 'Staff'}</Btn>
           </div>
         ))}
       </DeskCard>
@@ -834,6 +884,19 @@ function DesktopAdmin({ S }) {
                 catch (e) { S.toast({ msg: 'Close failed', icon: 'wallet' }); console.warn(e); }
               }}>Close</Btn>
             )}
+          </div>
+        ))}
+      </DeskCard>
+
+      <DeskSectionHead label="Grant & payout audit" />
+      <DeskCard style={{ padding: '4px 20px' }}>
+        {audit.length === 0 && <div style={{ padding: '14px 0', fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--dim)' }}>No grants or payouts yet (full-ledger view needs migration 0008).</div>}
+        {audit.map((t, i, a) => (
+          <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0', borderBottom: i < a.length - 1 ? '1px solid var(--line)' : 'none' }}>
+            <Icon name={t.ref === 'ritual' ? 'trophy' : 'gift'} size={15} color="var(--gold)" />
+            <span style={{ flex: 1, fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13.5, color: 'var(--text)' }}>{t.label}</span>
+            <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'var(--dim)' }}>{String(t.created_at).slice(0, 10)}</span>
+            <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 12.5, color: Number(t.amount) > 0 ? 'var(--green)' : 'var(--red)', minWidth: 70, textAlign: 'right' }}>{Number(t.amount) > 0 ? '+' : ''}{fmt(t.amount)}</span>
           </div>
         ))}
       </DeskCard>
