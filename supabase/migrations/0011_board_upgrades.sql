@@ -14,6 +14,7 @@ alter table public.tasks add column if not exists status_changed_at timestamptz 
 create or replace function public.stamp_task_status_change()
 returns trigger
 language plpgsql
+set search_path = public, pg_temp
 as $$
 begin
   if new.status is distinct from old.status then

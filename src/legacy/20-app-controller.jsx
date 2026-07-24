@@ -40,6 +40,7 @@ function useBeingCamp(t) {
   const [joinedChallenges, setJoinedChallenges] = React.useState(saved.joinedChallenges ?? []);
   const [claimedSeats, setClaimedSeats] = React.useState(saved.claimedSeats ?? []);
   const [serverRank, setServerRank] = React.useState(null); // live rank from the DB (levels auto-earned)
+  const [completions, setCompletions] = React.useState(null); // live track record (null → derive from workspaces)
   const [toastData, setToastData] = React.useState(null);
   const rankIndex = serverRank != null ? serverRank : Math.max(0, Math.min(4, t.rankIndex ?? 1));
 
@@ -95,6 +96,13 @@ function useBeingCamp(t) {
         setTeamRole(b.teamRole || null);
         if (typeof b.rankIndex === 'number') setServerRank(b.rankIndex);
         setEntered(true);
+        // Track record: delivered work, earnings and scores from the DB.
+        if (BE.listCompletions) BE.listCompletions().then((rows) => {
+          if (alive && rows && rows.length) setCompletions(rows.map((r) => ({
+            id: String(r.id), title: String(r.title), role: String(r.role), cat: r.cat ? String(r.cat) : null,
+            coins: Number(r.coins_earned || 0), score: r.score ? Number(r.score) : null, completed: !!r.completed,
+          })));
+        }).catch(() => {});
       } else if (entered && profile) {
         // Entered locally but no server account (e.g. sign-ins were disabled
         // when onboarding ran) — establish one now with the saved identity.
@@ -144,6 +152,19 @@ function useBeingCamp(t) {
         ? forYouFirst(open, mine, (c) => (typeof CAT_TO_INDUSTRY !== 'undefined' && CAT_TO_INDUSTRY[c.cat]) || (typeof INDUSTRIES !== 'undefined' && (INDUSTRIES.find((x) => x.name === c.cat) || {}).id) || c.cat)
         : open;
     })(),
+    // Track record: live completion rows, or derived from delivered demo work.
+    trackRecord: completions || (workspaces || []).filter((w) => w.stage >= 4).map((w) => ({
+      id: 'tr' + w.id, title: w.title, cat: w.cat,
+      role: w.you === 'poster' ? 'Poster' : (w.role || 'Member'),
+      coins: w.you === 'poster' ? 0 : (w.escrowReleased || w.budget || 0),
+      score: w.rating || null, completed: true,
+    })),
+    // Poster scores the whole crew on delivery — lands on every member's profile.
+    rateProject: (w, score) => {
+      setWorkspaces((prev) => prev.map((x) => x.id === w.id ? { ...x, rating: score } : x));
+      toast({ msg: `Crew scored ${score}/5`, icon: 'star' });
+      if (BE && BE.rateProject && /^[0-9a-f-]{36}$/i.test(w.id)) mirror(BE.rateProject(w.id, score));
+    },
     claimSeat: (call) => {
       setClaimedSeats((prev) => prev.includes(call.id) ? prev : [...prev, call.id]);
       toast({ msg: `You're on the crew · ${call.role}`, icon: 'check' });

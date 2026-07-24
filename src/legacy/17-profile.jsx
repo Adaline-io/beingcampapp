@@ -17,6 +17,45 @@ function RankLadder({ S }) {
   );
 }
 
+// Track record — the completion report: every delivered project with the
+// member's role, coins earned, and the score the poster gave the crew.
+function TrackRecordCard({ S }) {
+  const rec = S.trackRecord || [];
+  const done = rec.filter((r) => r.completed);
+  const earned = rec.reduce((s, r) => s + (r.coins || 0), 0);
+  const scored = rec.filter((r) => r.score);
+  const avg = scored.length ? (scored.reduce((s, r) => s + r.score, 0) / scored.length) : null;
+  return (
+    <Card pad={16} style={{ marginBottom: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <Eyebrow>Track record</Eyebrow>
+        <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'var(--muted)' }}>
+          {done.length} delivered · {fmt(earned)} BC earned{avg ? ` · ★ ${avg.toFixed(1)}` : ''}
+        </span>
+      </div>
+      {rec.length === 0 ? (
+        <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>
+          No completed work yet. Claim a crew seat in Find work — every delivery lands here with your earnings and score.
+        </div>
+      ) : rec.slice(0, 6).map((r, i, arr) => (
+        <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: i < arr.length - 1 ? '1px solid var(--line)' : 'none' }}>
+          <Icon name={r.completed ? 'checkCircle' : 'clock'} size={16} color={r.completed ? 'var(--green)' : 'var(--dim)'} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 13, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.title}</div>
+            <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 9.5, color: 'var(--dim)', marginTop: 2 }}>{r.role}{r.cat ? ` · ${r.cat}` : ''}{r.completed ? '' : ' · in progress'}</div>
+          </div>
+          {r.score && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontFamily: 'Space Mono, monospace', fontSize: 10.5, color: 'var(--gold)' }}>
+              <Icon name="star" size={12} color="var(--gold)" fill="var(--gold)" />{r.score}
+            </span>
+          )}
+          {r.coins > 0 && <BC amount={r.coins} size={12} color="var(--green)" />}
+        </div>
+      ))}
+    </Card>
+  );
+}
+
 function ProfileScreen({ S }) {
   const rank = RANK_PERKS[S.rankIndex];
   const next = RANK_PERKS[Math.min(S.rankIndex + 1, 4)];
@@ -71,6 +110,9 @@ function ProfileScreen({ S }) {
         </div>
         <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12, color: 'var(--muted)', marginTop: 14, lineHeight: 1.5 }}>{atTop ? 'You\u2019ve reached the top — Chief.' : <>Next: <strong style={{ color: 'var(--text)' }}>{next.name}</strong> — {next.commit}</>}</div>
       </Card>
+
+      {/* track record: delivered work, earnings, crew scores */}
+      <TrackRecordCard S={S} />
 
       {/* published works */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -166,4 +208,4 @@ function EditProfileSheet({ S, onClose }) {
   );
 }
 
-Object.assign(window, { ProfileScreen, RankLadder, EditProfileSheet });
+Object.assign(window, { ProfileScreen, RankLadder, EditProfileSheet, TrackRecordCard });

@@ -560,6 +560,9 @@ function DesktopYou({ S }) {
         </DeskCard>
       </div>
 
+      <DeskSectionHead label="Track record" />
+      <TrackRecordCard S={S} />
+
       <DeskSectionHead label="Account" />
       <div className="desk-2col">
         {[

@@ -534,6 +534,33 @@ export const backend = {
     return row ? this.mapProject(row as Record<string, unknown>, me) : null;
   },
 
+  /** A member's track record: completion rows, newest first (public read). */
+  async listCompletions(profileId?: string): Promise<Array<Record<string, unknown>>> {
+    if (!isBackendEnabled) return [];
+    const id = profileId ?? (await currentUserId());
+    if (!id) return [];
+    const { requireSupabase } = await import('../lib/supabase');
+    const { data: rows, error } = await requireSupabase()
+      .from('project_completions')
+      .select('id, project_id, role, coins_earned, score, completed, title, cat, created_at')
+      .eq('profile_id', id)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) throw error;
+    return rows ?? [];
+  },
+
+  /** Poster scores the whole crew on delivery (rate_project RPC, 1–5). */
+  async rateProject(projectId: string, score: number): Promise<void> {
+    if (!isBackendEnabled) return;
+    const { requireSupabase } = await import('../lib/supabase');
+    const { error } = await requireSupabase().rpc('rate_project', {
+      p_project_id: projectId,
+      p_score: Math.round(score),
+    });
+    if (error) throw error;
+  },
+
   /** Claim an open crew seat (claim_role RPC: locks the row, joins the team). */
   async claimRole(roleId: string): Promise<Record<string, unknown> | null> {
     if (!isBackendEnabled) return null;

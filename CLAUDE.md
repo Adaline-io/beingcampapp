@@ -31,7 +31,7 @@ Pages), installable PWA, and native iOS/Android via Capacitor.
   escrow splits, client tokens), seed catalog. Live project: `beingcampapp`
   (eutcbcbalfnwgqddhdog, keys committed in `src/lib/config.ts` — the anon key
   is publishable by design, protected by RLS).
-- `tests/e2e/` — 23 Playwright tests covering every core flow; CI runs them
+- `tests/e2e/` — 24 Playwright tests covering every core flow; CI runs them
   on every push with `VITE_FORCE_LOCAL=1` so tests never touch production.
 
 ## Commands

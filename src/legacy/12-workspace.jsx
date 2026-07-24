@@ -42,7 +42,12 @@ function DeliveredCard({ S, w }) {
                 </button>
               ))}
             </div>
-            <Btn variant="primary" full disabled={rated === 0} icon="check" onClick={() => { setSubmitted(true); S.toast({ msg: 'Rating submitted', icon: 'star' }); }}>Submit rating</Btn>
+            <Btn variant="primary" full disabled={rated === 0} icon="check" onClick={() => {
+              setSubmitted(true);
+              // Poster's score lands on every crew member's track record.
+              if (w.you === 'poster' && S.rateProject) S.rateProject(w, rated);
+              else S.toast({ msg: 'Rating submitted', icon: 'star' });
+            }}>Submit rating</Btn>
           </>
         ) : (
           <Btn variant="primary" full icon="arrowUR" onClick={() => { S.openSheet('publish', { project: w }); }}>Publish as a case study</Btn>

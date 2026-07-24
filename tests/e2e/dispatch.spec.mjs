@@ -29,6 +29,14 @@ test('client link renders the read-only progress page', async ({ page }) => {
   await expect(page.getByText(/seats filled/i)).toBeVisible();
 });
 
+test('the profile shows a track record section', async ({ page, context }) => {
+  await seedEntered(context);
+  await openHome(page);
+  await tap(page.getByText('You', { exact: true }).last());
+  await expect(page.getByText('Track record').first()).toBeVisible({ timeout: 8000 });
+  await expect(page.getByText(/delivered/i).first()).toBeVisible();
+});
+
 test('an invalid client token shows the inactive-link notice', async ({ page }) => {
   await page.goto('/?client=00000000-0000-0000-0000-000000000000');
   await expect(page.getByText(/link isn't active/i)).toBeVisible({ timeout: 15000 });
