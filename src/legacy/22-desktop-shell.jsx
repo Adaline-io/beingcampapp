@@ -827,6 +827,7 @@ function DesktopAdmin({ S }) {
       '',
       `Members: ${m.members ?? '—'} · Check-ins: ${m.checkins ?? '—'} · Projects delivered: ${m.delivered ?? '—'}`,
       `Coins earned: ${m.earned ?? '—'} BC · spent: ${m.spent ?? '—'} BC · Challenge entries: ${m.entries ?? '—'}`,
+      `House treasury: ${m.treasury ?? 0} BC (15% platform fees)`,
       '',
       'Top earners:',
       ...top.map((x, i) => `  ${i + 1}. ${x.name} — ${x.activity_coins || 0} BC`),
@@ -870,6 +871,7 @@ function DesktopAdmin({ S }) {
           <DeskStat icon="wallet" label="BC earned" value={fmt(metrics.earned)} tone="var(--gold)" sub={`${fmt(metrics.spent)} spent`} />
           <DeskStat icon="pool" label="Delivered" value={metrics.delivered} tone="var(--blue)" sub="projects" />
           <DeskStat icon="trophy" label="Entries" value={metrics.entries} tone="var(--purple)" sub="challenges" />
+          <DeskStat icon="lock" label="House treasury" value={fmt(metrics.treasury || 0)} tone="var(--gold)" sub="15% platform fees" />
         </div>
       )}
 
@@ -975,6 +977,14 @@ function DesktopBoard({ S }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   React.useEffect(() => { reload(); }, [reload]);
+  // Live board: any task change anywhere refreshes this view.
+  React.useEffect(() => {
+    if (!BE || !BE.enabled || !BE.subscribeBoard) return undefined;
+    let unsub = null, alive = true;
+    BE.subscribeBoard(() => reload()).then((u) => { if (alive) unsub = u; else u(); }).catch(() => {});
+    return () => { alive = false; if (unsub) unsub(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reload]);
 
   const addTask = async () => {
     const title = prompt('Task title:'); if (!title) return;

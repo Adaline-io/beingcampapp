@@ -73,24 +73,33 @@ const CHALLENGES = [
 
 function industryOf(id) { return INDUSTRIES.find((x) => x.id === id) || INDUSTRIES[0]; }
 
-// ── Dispatch: crew seats + payout shares ────────────────────────────────
+// ── Dispatch: crew seats + payout shares + rank gates ───────────────────
 // Each posted project opens one seat per template role. Shares are the
 // ratio used by the escrow release (milestone amount × share ÷ total), so
 // an equal split is the default; the lead absorbs the rounding remainder.
-function crewSharesFor(roles) {
+// The lead seat carries a rank gate so a brand-new member can't grab the
+// wheel on a big production — bigger budgets need a more proven lead.
+function crewSharesFor(roles, budget = 0) {
   const n = roles.length;
   if (!n) return [];
   const base = Math.floor(100 / n);
-  return roles.map((role, i) => ({ role, sharePct: i === 0 ? 100 - base * (n - 1) : base }));
+  const leadGate = budget >= 5000 ? 2 : budget >= 1500 ? 1 : 0; // Builder / Recruit / any
+  return roles.map((role, i) => ({
+    role,
+    sharePct: i === 0 ? 100 - base * (n - 1) : base,
+    minRank: i === 0 ? leadGate : 0,
+  }));
 }
+// Rank names for gate labels (matches profile ladder order).
+const RANK_LABELS = ['Visitor', 'Recruit', 'Builder', 'Maker', 'Chief'];
 
 // Demo crew calls — the local-mode dispatch feed (live mode loads real
 // open seats from the database instead).
 const CREW_CALLS = [
-  { id: 'cc1', role: 'Editor', sharePct: 30, projectId: 'demo1', title: 'Backwater wedding film — final cut', cat: 'Film & Video', budget: 2400 },
-  { id: 'cc2', role: 'Frontend dev', sharePct: 34, projectId: 'demo2', title: 'Café ordering site', cat: 'Tech', budget: 1800 },
-  { id: 'cc3', role: 'Illustrator', sharePct: 33, projectId: 'demo3', title: 'Monsoon gig poster series', cat: 'Design', budget: 900 },
-  { id: 'cc4', role: 'Sound', sharePct: 20, projectId: 'demo1', title: 'Backwater wedding film — final cut', cat: 'Film & Video', budget: 2400 },
+  { id: 'cc1', role: 'Director', sharePct: 40, minRank: 2, projectId: 'demo1', title: 'Backwater wedding film — final cut', cat: 'Film & Video', budget: 2400 },
+  { id: 'cc2', role: 'Frontend dev', sharePct: 34, minRank: 0, projectId: 'demo2', title: 'Café ordering site', cat: 'Tech', budget: 1800 },
+  { id: 'cc3', role: 'Illustrator', sharePct: 33, minRank: 0, projectId: 'demo3', title: 'Monsoon gig poster series', cat: 'Design', budget: 900 },
+  { id: 'cc4', role: 'Sound', sharePct: 20, minRank: 0, projectId: 'demo1', title: 'Backwater wedding film — final cut', cat: 'Film & Video', budget: 2400 },
 ];
 
 // ── Personalization: use cases follow the member's craft, not everyone
@@ -182,4 +191,4 @@ function DesktopChallenges({ S }) {
   );
 }
 
-Object.assign(window, { INDUSTRIES, CHALLENGES, CREW_CALLS, industryOf, industriesForProfile, forYouFirst, crewSharesFor, CAT_TO_INDUSTRY, ChallengesScreen, DesktopChallenges });
+Object.assign(window, { INDUSTRIES, CHALLENGES, CREW_CALLS, RANK_LABELS, industryOf, industriesForProfile, forYouFirst, crewSharesFor, CAT_TO_INDUSTRY, ChallengesScreen, DesktopChallenges });

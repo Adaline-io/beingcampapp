@@ -29,6 +29,17 @@ test('client link renders the read-only progress page', async ({ page }) => {
   await expect(page.getByText(/seats filled/i)).toBeVisible();
 });
 
+test('a rank-gated crew seat blocks members below the bar', async ({ page, context }) => {
+  await seedEntered(context);
+  await openHome(page);
+  await tap(page.getByText('Projects', { exact: true }).last());
+  await tap(page.getByText(/Find work/i).first());
+  await expect(page.getByText(/Crew calls/i).first()).toBeVisible({ timeout: 8000 });
+  // The Director seat needs Builder+; a Recruit sees a disabled Join.
+  const gated = page.getByRole('button', { name: 'Join as Director' }).first();
+  await expect(gated).toBeDisabled();
+});
+
 test('the profile shows a track record section', async ({ page, context }) => {
   await seedEntered(context);
   await openHome(page);

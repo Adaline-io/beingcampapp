@@ -62,9 +62,13 @@ function WorkspaceRow({ S, w }) {
   );
 }
 
-// One open crew seat — role, project, payout share; claiming is instant.
+// One open crew seat — role, project, payout share, rank gate; claiming is
+// instant when eligible. Team gets 85% of each release (house keeps 15%).
 function CrewCallCard({ S, c }) {
-  const est = Math.floor((c.budget || 0) * (c.sharePct || 0) / 100);
+  const gate = c.minRank || 0;
+  const est = Math.floor((c.budget || 0) * 0.85 * (c.sharePct || 0) / 100);
+  const eligible = S.rankIndex >= gate;
+  const gateLabel = (typeof RANK_LABELS !== 'undefined' && RANK_LABELS[gate]) || 'Recruit';
   return (
     <Card pad={14} style={{ marginBottom: 10 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -72,11 +76,12 @@ function CrewCallCard({ S, c }) {
           <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
             <Badge tone="gold">{c.role}</Badge>
             <Badge tone="grey">{c.cat}</Badge>
+            {gate > 0 && <Badge tone={eligible ? 'green' : 'red'}>{gateLabel}+</Badge>}
           </div>
           <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 14.5, color: 'var(--text)', lineHeight: 1.3 }}>{c.title}</div>
-          <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10.5, color: 'var(--dim)', marginTop: 4 }}>{c.sharePct}% of each release · ≈{fmt(est)} BC</div>
+          <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10.5, color: 'var(--dim)', marginTop: 4 }}>{c.sharePct}% of team share · ≈{fmt(est)} BC</div>
         </div>
-        <Btn variant="primary" size="sm" ariaLabel={`Join as ${c.role}`} onClick={() => S.claimSeat(c)}>Join</Btn>
+        <Btn variant="primary" size="sm" disabled={!eligible} ariaLabel={`Join as ${c.role}`} onClick={() => S.claimSeat(c)}>Join</Btn>
       </div>
     </Card>
   );
@@ -191,7 +196,7 @@ function PostWorkSheet({ S, onClose }) {
   const afford = S.balance >= budget;
   const fund = () => {
     if (!afford) { onClose(); S.go('buy'); S.toast({ msg: 'Top up to fund the escrow', icon: 'wallet' }); return; }
-    S.spend(budget, 'Project escrow funded', 'pool');
+    S.fundEscrow(budget, 'Project escrow funded');
     S.addPostedWork({ cat, budget, template: ind });
     setStep(2);
   };

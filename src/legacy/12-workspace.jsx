@@ -128,21 +128,45 @@ function WSOverview({ S, w, setW }) {
         </div>
         <Progress value={w.escrowReleased} max={w.budget} color="var(--green)" h={7} />
         <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 11.5, color: 'var(--muted)', marginTop: 10, lineHeight: 1.4 }}>{releasedPct}% released · funds unlock to the team as you approve each milestone.</div>
+        {isPoster && w.state !== 'cancelled' && !delivered && (
+          <div style={{ marginTop: 14, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+            <Btn variant="danger" size="sm" full icon="wallet" onClick={() => {
+              const released = (w.milestones || []).filter((m) => m.status === 'done').reduce((s, m) => s + (m.bc || 0), 0);
+              const refund = Math.max(0, (w.budget || 0) - released);
+              if (window.confirm(`Cancel this project? ${fmt(refund)} BC of unreleased escrow is refunded to you. Released milestones are not clawed back.`)) S.cancelProject(w);
+            }}>Cancel &amp; refund unreleased escrow</Btn>
+          </div>
+        )}
+        {w.state === 'cancelled' && (
+          <div style={{ marginTop: 12, fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12, color: 'var(--red)', fontWeight: 600 }}>Cancelled · unreleased escrow refunded.</div>
+        )}
       </Card>
 
       {/* crew seats: who the dispatch system is still calling for */}
       {(w.seats || []).length > 0 && (
         <Card pad={16} style={{ marginBottom: 14 }}>
           <Eyebrow style={{ marginBottom: 10 }}>Crew seats</Eyebrow>
-          {w.seats.map((s, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: i < w.seats.length - 1 ? '1px solid var(--line)' : 'none' }}>
-              <Icon name={s.filled ? 'checkCircle' : 'clock'} size={15} color={s.filled ? 'var(--green)' : 'var(--dim)'} />
-              <span style={{ flex: 1, fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--text)' }}>{s.role}</span>
-              <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 10.5, color: 'var(--dim)' }}>{s.sharePct}% share</span>
-              <Badge tone={s.filled ? 'green' : 'grey'}>{s.filled ? 'Filled' : 'Open'}</Badge>
-            </div>
-          ))}
-          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 11.5, color: 'var(--muted)', marginTop: 10, lineHeight: 1.4 }}>Open seats appear as crew calls in Find work. Each release splits by these shares.</div>
+          {w.seats.map((s, i) => {
+            const gate = s.minRank || 0;
+            const gateLabel = (typeof RANK_LABELS !== 'undefined' && RANK_LABELS[gate]) || '';
+            const canKick = isPoster && s.filled && w.state !== 'cancelled';
+            const canLeave = !isPoster && s.mine && w.state !== 'cancelled';
+            return (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: i < w.seats.length - 1 ? '1px solid var(--line)' : 'none' }}>
+                <Icon name={s.filled ? 'checkCircle' : 'clock'} size={15} color={s.filled ? 'var(--green)' : 'var(--dim)'} />
+                <span style={{ flex: 1, fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--text)' }}>{s.role}{gate > 0 ? <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 9.5, color: 'var(--dim)' }}> · {gateLabel}+</span> : null}</span>
+                <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 10.5, color: 'var(--dim)' }}>{s.sharePct}% share</span>
+                {canKick ? (
+                  <button className="tap" onClick={() => window.confirm(`Remove the ${s.role} and reopen the seat?`) && S.kickSeat(w, s)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 11.5, fontWeight: 600, color: 'var(--red)' }}>Remove</button>
+                ) : canLeave ? (
+                  <button className="tap" onClick={() => window.confirm('Leave this seat? It reopens for someone else.') && S.leaveSeat(w, s)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 11.5, fontWeight: 600, color: 'var(--red)' }}>Leave</button>
+                ) : (
+                  <Badge tone={s.filled ? 'green' : 'grey'}>{s.filled ? 'Filled' : 'Open'}</Badge>
+                )}
+              </div>
+            );
+          })}
+          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 11.5, color: 'var(--muted)', marginTop: 10, lineHeight: 1.4 }}>Open seats appear as crew calls in Find work. Each release splits the team's 85% by these shares.</div>
         </Card>
       )}
 
@@ -169,14 +193,29 @@ function WSOverview({ S, w, setW }) {
         {isPoster && <span style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 11.5, fontWeight: 600, color: 'var(--gold)' }}>You confirmed</span>}
       </div>
       <Card pad={6} style={{ marginBottom: 14 }}>
-        {w.team.map((m, i) => (
-          <button key={i} className="tap" onClick={() => !m.you && S.go('memberProfile', { name: m.name })} style={{ width: '100%', textAlign: 'left', cursor: m.you ? 'default' : 'pointer', background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', gap: 12, padding: '11px 12px', borderBottom: i < w.team.length - 1 ? '1px solid var(--line)' : 'none' }}>
-            <div style={{ width: 36, height: 36, borderRadius: 11, background: m.you ? 'var(--gold-dim)' : 'var(--panel)', border: '1px solid var(--line2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 14, color: m.you ? 'var(--gold)' : 'var(--muted)' }}>{m.you ? 'YOU' : m.name.split(' ').map(x=>x[0]).join('')}</span></div>
-            <div style={{ flex: 1 }}><div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 600, fontSize: 13.5, color: 'var(--text)' }}>{m.you ? 'You' : m.name}</div><div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 11.5, color: 'var(--muted)' }}>{m.role}</div></div>
-            {m.lead && <Badge tone="gold">Lead</Badge>}
-            {!m.you && <Icon name="chevR" size={15} color="var(--dim)" />}
-          </button>
-        ))}
+        {w.team.map((m, i) => {
+          // Once delivered, the poster scores each crew member individually.
+          const canScore = isPoster && delivered && !m.you;
+          return (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 12px', borderBottom: i < w.team.length - 1 ? '1px solid var(--line)' : 'none' }}>
+            <button className="tap" onClick={() => !m.you && S.go('memberProfile', { name: m.name })} style={{ flex: 1, textAlign: 'left', cursor: m.you ? 'default' : 'pointer', background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 11, background: m.you ? 'var(--gold-dim)' : 'var(--panel)', border: '1px solid var(--line2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><span style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 14, color: m.you ? 'var(--gold)' : 'var(--muted)' }}>{m.you ? 'YOU' : m.name.split(' ').map(x=>x[0]).join('')}</span></div>
+              <div style={{ flex: 1 }}><div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 600, fontSize: 13.5, color: 'var(--text)' }}>{m.you ? 'You' : m.name}</div><div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 11.5, color: 'var(--muted)' }}>{m.role}</div></div>
+            </button>
+            {canScore ? (
+              <div style={{ display: 'flex', gap: 2 }}>
+                {[1,2,3,4,5].map((n) => (
+                  <button key={n} className="tap" aria-label={`Score ${m.name} ${n}`} onClick={() => S.rateMember(w, m, n)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 1 }}>
+                    <Icon name="star" size={16} color={n <= (m.score || 0) ? 'var(--gold)' : 'var(--line2)'} fill={n <= (m.score || 0) ? 'var(--gold)' : 'none'} />
+                  </button>
+                ))}
+              </div>
+            ) : m.score ? (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontFamily: 'Space Mono, monospace', fontSize: 11, color: 'var(--gold)' }}><Icon name="star" size={12} color="var(--gold)" fill="var(--gold)" />{m.score}</span>
+            ) : m.lead ? <Badge tone="gold">Lead</Badge> : (!m.you && <Icon name="chevR" size={15} color="var(--dim)" />)}
+          </div>
+          );
+        })}
       </Card>
       </>)}
 

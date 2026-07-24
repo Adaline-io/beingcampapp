@@ -109,7 +109,20 @@ function useBeingCamp(t) {
         mirror(BE.signIn(profile, balance));
       }
     }).catch((e) => console.warn('[beingcamp] backend boot failed:', e));
-    return () => { alive = false; };
+    // Live bell: new notifications stream in without a reload.
+    let unsub = null;
+    if (BE.subscribeNotifications) {
+      BE.subscribeNotifications((n) => {
+        if (!alive) return;
+        setNotifs((prev) => [{
+          id: String(n.id), ic: n.ic || 'bell', tone: n.tone || 'gold',
+          title: String(n.title || 'Update'), body: String(n.body || ''),
+          when: 'Now', unread: true, group: 'Today', cta: n.cta || null,
+        }, ...prev]);
+        toast({ msg: String(n.title || 'New notification'), icon: n.ic || 'bell' });
+      }).then((u) => { if (alive) unsub = u; else u(); }).catch(() => {});
+    }
+    return () => { alive = false; if (unsub) unsub(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -165,6 +178,15 @@ function useBeingCamp(t) {
       toast({ msg: `Crew scored ${score}/5`, icon: 'star' });
       if (BE && BE.rateProject && /^[0-9a-f-]{36}$/i.test(w.id)) mirror(BE.rateProject(w.id, score));
     },
+    // Poster scores one crew member (per-person completion report).
+    rateMember: (w, member, score) => {
+      setWorkspaces((prev) => prev.map((x) => x.id === w.id
+        ? { ...x, team: (x.team || []).map((m) => m === member ? { ...m, score } : m) } : x));
+      toast({ msg: `${member.you ? 'You' : member.name} scored ${score}/5`, icon: 'star' });
+      if (BE && BE.rateMember && /^[0-9a-f-]{36}$/i.test(w.id) && member.profileId && /^[0-9a-f-]{36}$/i.test(member.profileId)) {
+        mirror(BE.rateMember(w.id, member.profileId, score));
+      }
+    },
     claimSeat: (call) => {
       setClaimedSeats((prev) => prev.includes(call.id) ? prev : [...prev, call.id]);
       toast({ msg: `You're on the crew · ${call.role}`, icon: 'check' });
@@ -174,7 +196,17 @@ function useBeingCamp(t) {
         BE.claimRole(call.id)
           .then(() => BE.boot())
           .then((b) => { if (b && b.projects) setWorkspaces(b.projects); })
-          .catch((e) => { console.warn('[beingcamp] claim failed:', e); toast({ msg: 'Seat already taken — pick another', icon: 'lock' }); });
+          .catch((e) => {
+            console.warn('[beingcamp] claim failed:', e);
+            // Roll back the optimistic hide + surface the real reason.
+            setClaimedSeats((prev) => prev.filter((x) => x !== call.id));
+            const msg = String((e && e.message) || '');
+            const nice = /higher rank/.test(msg) ? 'That seat needs a higher rank'
+              : /already on this project/.test(msg) ? 'You already hold a seat here'
+              : /already filled/.test(msg) ? 'Seat just got taken — pick another'
+              : 'Could not join — try another seat';
+            toast({ msg: nice, icon: 'lock' });
+          });
       } else {
         // Demo: open a member-side workspace for the claimed seat.
         setWorkspaces((prev) => [{
@@ -220,6 +252,19 @@ function useBeingCamp(t) {
       if (BE) mirror(BE.syncCheckin(zone.id));
     },
     spend: (amt, label, ref) => { setBalance((b) => b - amt); pushTxn(label, -amt, ref); toast({ msg: label, coin: -amt }); if (BE) mirror(BE.syncTransaction(label, -amt, ref)); },
+    // Escrow funding is deducted server-side by create_project — mirror locally
+    // only, so the balance drops once (not twice) in live mode.
+    fundEscrow: (amt, label) => { setBalance((b) => b - amt); pushTxn(label, -amt, 'pool'); toast({ msg: label, coin: -amt }); },
+    cancelProject: (w) => {
+      const released = (w.milestones || []).filter((m) => m.status === 'done').reduce((s, m) => s + (m.bc || 0), 0);
+      const refund = Math.max(0, (w.budget || 0) - released);
+      setWorkspaces((prev) => prev.map((x) => x.id === w.id ? { ...x, state: 'cancelled', stage: Math.min(x.stage, 1) } : x));
+      if (refund > 0) { setBalance((b) => b + refund); pushTxn('Escrow refunded · ' + w.title, refund, 'pool'); }
+      toast({ msg: refund > 0 ? `Cancelled · ${fmt(refund)} BC refunded` : 'Project cancelled', icon: 'wallet' });
+      if (BE && BE.cancelProject && /^[0-9a-f-]{36}$/i.test(w.id)) {
+        BE.cancelProject(w.id).then(() => BE.boot()).then((b) => { if (b) { setBalance(b.balance); if (b.projects) setWorkspaces(b.projects); } }).catch((e) => console.warn('[beingcamp] cancel failed:', e));
+      }
+    },
     earn: (amt, label, ref) => { setBalance((b) => b + amt); setActivityCoins((a) => a + amt); pushTxn(label, amt, ref); toast({ msg: label, coin: amt }); if (BE) mirror(BE.syncTransaction(label, amt, ref)); },
     buyPack: (pack) => { const total = pack.coins + pack.bonus; const label = `${pack.name}${pack.bonus ? ` · +${pack.bonus} bonus` : ''}`; setBalance((b) => b + total); pushTxn(label, total, 'pack'); if (BE) mirror(BE.syncTransaction(label, total, 'pack')); },
     applyWork: (id) => setAppliedWork((p) => p.includes(id) ? p : [...p, id]),
@@ -254,7 +299,7 @@ function useBeingCamp(t) {
       // Crew seats: one open seat per template role, payout shares split equally
       // (lead takes the rounding remainder). These become claimable crew calls.
       const roles = (template && template.roles && typeof crewSharesFor !== 'undefined')
-        ? crewSharesFor(template.roles) : [];
+        ? crewSharesFor(template.roles, budget) : [];
       if (BE) {
         BE.syncProject({ title, cat, budget, milestones, roles })
           .then((w) => { if (w) setWorkspaces((prev) => prev.map((x) => x.id === tempId ? { ...w, shortlist: x.shortlist, chat: x.chat } : x)); })
@@ -276,6 +321,26 @@ function useBeingCamp(t) {
     }, ...p]);
     },
     updateWorkspace: (w) => setWorkspaces((p) => p.map((x) => x.id === w.id ? w : x)),
+    // Seat management: a member leaves their own seat, or the poster kicks a
+    // claimant. Both reopen the seat (server refuses once coins have been paid).
+    leaveSeat: (w, seat) => {
+      if (BE && BE.unclaimRole && /^[0-9a-f-]{36}$/i.test(seat.id || '')) {
+        BE.unclaimRole(seat.id).then(() => BE.boot()).then((b) => { if (b && b.projects) setWorkspaces(b.projects); })
+          .catch((e) => { console.warn(e); toast({ msg: String(e && e.message || '').includes('earned') ? 'You have already earned here' : 'Could not leave', icon: 'lock' }); });
+      } else {
+        setWorkspaces((prev) => prev.filter((x) => x.id !== w.id));
+      }
+      toast({ msg: 'Left the crew', icon: 'arrowR' });
+    },
+    kickSeat: (w, seat) => {
+      if (BE && BE.releaseSeat && /^[0-9a-f-]{36}$/i.test(seat.id || '')) {
+        BE.releaseSeat(seat.id).then(() => BE.boot()).then((b) => { if (b && b.projects) setWorkspaces(b.projects); })
+          .catch((e) => { console.warn(e); toast({ msg: String(e && e.message || '').includes('earned') ? 'They already earned — cannot remove' : 'Could not remove', icon: 'lock' }); });
+      } else {
+        setWorkspaces((prev) => prev.map((x) => x.id === w.id ? { ...x, seats: (x.seats || []).map((s) => s === seat ? { ...s, filled: false, mine: false } : s), team: (x.team || []).filter((m) => m.role !== seat.role) } : x));
+      }
+      toast({ msg: `Seat reopened · ${seat.role}`, icon: 'arrowR' });
+    },
     addSchedule: (id, item) => setWorkspaces((p) => p.map((x) => x.id === id ? { ...x, schedule: [...(x.schedule || []), item] } : x)),
     addPublication: ({ type, title, project }) => {
       setPublications((prev) => [{

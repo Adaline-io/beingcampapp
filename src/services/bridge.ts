@@ -218,7 +218,7 @@ export const backend = {
             const { requireSupabase } = await import('../lib/supabase');
             const { data: rows } = await requireSupabase()
               .from('project_roles')
-              .select('id, role, share_pct, project_id, projects(title, cat, budget, owner_id)')
+              .select('id, role, share_pct, min_rank, project_id, projects(title, cat, budget, owner_id, state)')
               .eq('status', 'open')
               .order('created_at', { ascending: false })
               .limit(50);
@@ -342,13 +342,14 @@ export const backend = {
       }));
 
       const uiCrewCalls = (crewRows as Array<Record<string, unknown>>)
-        .filter((r) => r.projects)
+        .filter((r) => r.projects && (r.projects as Record<string, unknown>).state !== 'cancelled')
         .map((r) => {
           const p = r.projects as Record<string, unknown>;
           return {
             id: String(r.id),
             role: String(r.role),
             sharePct: Number(r.share_pct ?? 0),
+            minRank: Number(r.min_rank ?? 0),
             projectId: String(r.project_id),
             title: String(p.title),
             cat: String(p.cat ?? 'Branding'),
@@ -510,7 +511,7 @@ export const backend = {
     cat: string;
     budget: number;
     milestones: Array<{ name: string; bc: number }>;
-    roles?: Array<{ role: string; sharePct: number }>;
+    roles?: Array<{ role: string; sharePct: number; minRank?: number }>;
   }): Promise<Record<string, unknown> | null> {
     if (!isBackendEnabled) return null;
     const me = await currentUserId();
@@ -522,7 +523,9 @@ export const backend = {
       p_cat: input.cat,
       p_budget: Math.round(input.budget),
       p_milestones: input.milestones.map((m) => ({ label: m.name, amount: Math.round(m.bc) })),
-      p_roles: (input.roles ?? []).map((r) => ({ role: r.role, share_pct: Math.round(r.sharePct) })),
+      p_roles: (input.roles ?? []).map((r) => ({
+        role: r.role, share_pct: Math.round(r.sharePct), min_rank: Math.round(r.minRank ?? 0),
+      })),
     });
     if (error) throw error;
     const { data: rows, error: qErr } = await sb
@@ -572,6 +575,72 @@ export const backend = {
     return (result as Record<string, unknown>) ?? null;
   },
 
+  /** A member leaves a seat before earning (unclaim_role RPC). */
+  async unclaimRole(roleId: string): Promise<void> {
+    if (!isBackendEnabled) return;
+    const { requireSupabase } = await import('../lib/supabase');
+    const { error } = await requireSupabase().rpc('unclaim_role', { p_role_id: roleId });
+    if (error) throw error;
+  },
+
+  /** Poster kicks a claimant and reopens the seat (release_seat RPC). */
+  async releaseSeat(roleId: string): Promise<void> {
+    if (!isBackendEnabled) return;
+    const { requireSupabase } = await import('../lib/supabase');
+    const { error } = await requireSupabase().rpc('release_seat', { p_role_id: roleId });
+    if (error) throw error;
+  },
+
+  /** Score one crew member on a delivered project (rate_member RPC, 1–5). */
+  async rateMember(projectId: string, profileId: string, score: number): Promise<void> {
+    if (!isBackendEnabled) return;
+    const { requireSupabase } = await import('../lib/supabase');
+    const { error } = await requireSupabase().rpc('rate_member', {
+      p_project_id: projectId, p_profile: profileId, p_score: Math.round(score),
+    });
+    if (error) throw error;
+  },
+
+  /**
+   * Live notifications: subscribe to inserts on my notifications row and call
+   * back with each new one. Returns an unsubscribe function (no-op if offline).
+   */
+  async subscribeNotifications(onInsert: (n: Record<string, unknown>) => void): Promise<() => void> {
+    if (!isBackendEnabled) return () => {};
+    const userId = await currentUserId();
+    if (!userId) return () => {};
+    const { requireSupabase } = await import('../lib/supabase');
+    const sb = requireSupabase();
+    const channel = sb
+      .channel('notifs-' + userId)
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `profile_id=eq.${userId}` },
+        (payload: { new: Record<string, unknown> }) => onInsert(payload.new))
+      .subscribe();
+    return () => { sb.removeChannel(channel); };
+  },
+
+  /** Live board: fire the callback whenever any task changes (staff board). */
+  async subscribeBoard(onChange: () => void): Promise<() => void> {
+    if (!isBackendEnabled) return () => {};
+    const { requireSupabase } = await import('../lib/supabase');
+    const sb = requireSupabase();
+    const channel = sb
+      .channel('board')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => onChange())
+      .subscribe();
+    return () => { sb.removeChannel(channel); };
+  },
+
+  /** Reliability signal for a member: delivered count, avg score, earnings. */
+  async memberStats(profileId: string): Promise<Record<string, unknown> | null> {
+    if (!isBackendEnabled) return null;
+    const { requireSupabase } = await import('../lib/supabase');
+    const { data: stats, error } = await requireSupabase().rpc('member_stats', { p_profile: profileId });
+    if (error) throw error;
+    return (stats as Record<string, unknown>) ?? null;
+  },
+
   /** Token-scoped read-only project snapshot for clients (no account needed). */
   async clientProject(token: string): Promise<Record<string, unknown> | null> {
     if (!isBackendEnabled) return null;
@@ -581,6 +650,25 @@ export const backend = {
     });
     if (error) throw error;
     return (snapshot as Record<string, unknown>) ?? null;
+  },
+
+  /** Cancel a project and refund the unreleased escrow to the poster. */
+  async cancelProject(projectId: string): Promise<Record<string, unknown> | null> {
+    if (!isBackendEnabled) return null;
+    const { requireSupabase } = await import('../lib/supabase');
+    const { data: result, error } = await requireSupabase().rpc('cancel_project', {
+      p_project_id: projectId,
+    });
+    if (error) throw error;
+    return (result as Record<string, unknown>) ?? null;
+  },
+
+  /** House treasury balance (admin-read); null if not permitted/empty. */
+  async treasuryBalance(): Promise<number | null> {
+    if (!isBackendEnabled) return null;
+    const { requireSupabase } = await import('../lib/supabase');
+    const { data: row } = await requireSupabase().from('treasury').select('balance').eq('id', 1).maybeSingle();
+    return row ? Number((row as Record<string, unknown>).balance) : null;
   },
 
   /** Escrow release for a server-backed milestone (owner-only, paid in SQL). */
@@ -709,7 +797,8 @@ export const backend = {
     ]);
     const earned = (txnRows as Array<{ amount: number }>).filter((t) => t.amount > 0).reduce((a, t) => a + t.amount, 0);
     const spent = (txnRows as Array<{ amount: number }>).filter((t) => t.amount < 0).reduce((a, t) => a - t.amount, 0);
-    return { members, checkins, delivered, entries, earned, spent };
+    const treasury = (await backend.treasuryBalance().catch(() => null)) ?? 0;
+    return { members, checkins, delivered, entries, earned, spent, treasury };
   },
 
   /** Recent grant/payout ledger lines for the audit view (admin read, 0008). */
@@ -896,6 +985,7 @@ export const backend = {
     const team = members
       .filter((m) => String(m.role ?? '') !== 'poster')
       .map((m) => ({
+        profileId: String(m.profile_id),
         name:
           String(m.profile_id) === me
             ? 'You'
@@ -911,14 +1001,18 @@ export const backend = {
       you: isOwner ? 'poster' : 'member',
       role: isOwner ? 'Poster' : myRole,
       stage: Number(row.stage ?? 1),
+      state: String(row.state ?? 'active'),
       budget: Number(row.budget ?? 0),
       escrowReleased: ms.filter((m) => m.released).reduce((s, m) => s + Number(m.amount), 0),
       deadline: 'Open',
       team,
       seats: seats.map((s) => ({
+        id: String(s.id),
         role: String(s.role),
         sharePct: Number(s.share_pct ?? 0),
+        minRank: Number(s.min_rank ?? 0),
         filled: String(s.status) === 'filled',
+        mine: me != null && String(s.filled_by ?? '') === me,
       })),
       clientToken: (row.client_token as string | null) ?? null,
       shortlist: [],
