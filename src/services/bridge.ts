@@ -236,6 +236,36 @@ export const backend = {
       const zoneName = new Map(
         (zones as Array<Record<string, unknown>>).map((z) => [String(z.id), String(z.name)])
       );
+
+      // DB zones drive the real cost + rank gate (record_checkin reads them);
+      // the design metadata (number, layer, accent) is matched in by slug so
+      // the Zones screen shows exactly what gets charged.
+      const ZONE_META: Record<string, { n: string; layer: string; accent: string }> = {
+        front: { n: '01', layer: 'Public', accent: 'var(--muted)' },
+        camp: { n: '02', layer: 'Work', accent: 'var(--gold)' },
+        room: { n: '03', layer: 'Immersive', accent: 'var(--blue)' },
+        den: { n: '04', layer: 'Community', accent: 'var(--green)' },
+        stage: { n: '05', layer: 'Programme', accent: 'var(--purple)' },
+        inner: { n: '06', layer: 'Authority', accent: 'var(--red)' },
+      };
+      const uiZones = (zones as Array<Record<string, unknown>>)
+        .map((z, i) => {
+          const meta = ZONE_META[String(z.id)] || {
+            n: String(i + 1).padStart(2, '0'), layer: 'Zone', accent: 'var(--gold)',
+          };
+          return {
+            id: String(z.id),
+            name: String(z.name),
+            desc: String(z.description ?? ''),
+            cost: Number(z.cost ?? 0),
+            minRank: Number(z.min_rank ?? 0),
+            bookable: Boolean(z.bookable),
+            n: meta.n,
+            layer: meta.layer,
+            accent: meta.accent,
+          };
+        })
+        .sort((a, b) => a.n.localeCompare(b.n));
       const initials = (name: string) =>
         name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
 
@@ -366,6 +396,7 @@ export const backend = {
         });
 
       return {
+        zones: uiZones,
         crewCalls: uiCrewCalls,
         challenges: uiChallenges,
         packs: uiPacks,
@@ -773,6 +804,67 @@ export const backend = {
       tag: input.tag,
       description: input.desc,
     });
+    if (error) throw error;
+  },
+
+  /** Add a store product (admin write RLS). */
+  async adminAddProduct(input: {
+    name: string; source: string; bc: number; cat: string; type: string; desc: string;
+  }): Promise<void> {
+    const { requireSupabase } = await import('../lib/supabase');
+    const { error } = await requireSupabase().from('products').insert({
+      name: input.name,
+      source: input.source || 'BeingCamp',
+      bc: Math.max(0, Math.round(input.bc)),
+      cat: input.cat || 'Merch',
+      type: ['physical', 'pass', 'digital'].includes(input.type) ? input.type : 'physical',
+      description: input.desc || null,
+    });
+    if (error) throw error;
+  },
+
+  /** Add a bookable service (admin write RLS). */
+  async adminAddService(input: {
+    name: string; provider: string; bc: number; cat: string; desc: string;
+  }): Promise<void> {
+    const { requireSupabase } = await import('../lib/supabase');
+    const { error } = await requireSupabase().from('services').insert({
+      name: input.name,
+      provider: input.provider || 'BeingCamp',
+      bc: Math.max(0, Math.round(input.bc)),
+      cat: input.cat || null,
+      description: input.desc || null,
+    });
+    if (error) throw error;
+  },
+
+  /** Add a coin top-up pack (admin write RLS). price in rupees → cents. */
+  async adminAddPack(input: {
+    name: string; coins: number; bonus: number; priceInr: number;
+  }): Promise<void> {
+    const { requireSupabase } = await import('../lib/supabase');
+    const { error } = await requireSupabase().from('coin_packs').insert({
+      name: input.name,
+      coins: Math.max(0, Math.round(input.coins)),
+      bonus: Math.max(0, Math.round(input.bonus)),
+      price_cents: Math.max(0, Math.round(input.priceInr * 100)),
+    });
+    if (error) throw error;
+  },
+
+  /** Add or update a zone by slug (admin write RLS) — edits cost/rank live. */
+  async adminUpsertZone(input: {
+    id: string; name: string; desc: string; cost: number; minRank: number; bookable: boolean;
+  }): Promise<void> {
+    const { requireSupabase } = await import('../lib/supabase');
+    const { error } = await requireSupabase().from('zones').upsert({
+      id: input.id.trim().toLowerCase().replace(/[^a-z0-9_-]/g, ''),
+      name: input.name,
+      description: input.desc || null,
+      cost: Math.max(0, Math.round(input.cost)),
+      min_rank: Math.max(0, Math.min(4, Math.round(input.minRank))),
+      bookable: !!input.bookable,
+    }, { onConflict: 'id' });
     if (error) throw error;
   },
 

@@ -660,7 +660,7 @@ function DesktopZones({ S }) {
         <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Check in as you move through the space</div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
-        {ZONES.map((z) => {
+        {(S.zones || ZONES).map((z) => {
           const locked = S.rankIndex < z.minRank;
           return (
             <DeskCard key={z.id} onClick={() => S.openSheet('checkin', { zone: z })} style={{ opacity: locked ? 0.55 : 1 }}>
@@ -857,6 +857,56 @@ function DesktopAdmin({ S }) {
     } catch (e) { S.toast({ msg: 'Update failed', icon: 'wallet' }); console.warn(e); }
     setBusy(false);
   };
+  // ── Catalog: add real store items, services, coin packs, and edit zones ──
+  const addProduct = async () => {
+    const name = prompt('Product name:'); if (!name) return;
+    const source = prompt('Seller / brand:', 'BeingCamp') || 'BeingCamp';
+    const bc = parseInt(prompt('Price in BeingCoin:', '200') || '0', 10);
+    const cat = prompt('Category (e.g. Merch, Passes, Drops):', 'Merch') || 'Merch';
+    const type = prompt('Type — physical / pass / digital:', 'physical') || 'physical';
+    const desc = prompt('Short description (optional):') || '';
+    setBusy(true);
+    try { await BE.adminAddProduct({ name, source, bc, cat, type, desc }); S.toast({ msg: 'Product added to the store' }); }
+    catch (e) { S.toast({ msg: 'Add failed — admin only', icon: 'wallet' }); console.warn(e); }
+    setBusy(false);
+  };
+  const addService = async () => {
+    const name = prompt('Service name:'); if (!name) return;
+    const provider = prompt('Provider / team:', 'BeingCamp') || 'BeingCamp';
+    const bc = parseInt(prompt('From price in BeingCoin:', '500') || '0', 10);
+    const cat = prompt('Category (e.g. Branding, Production):', 'Branding') || 'Branding';
+    const desc = prompt('Short description (optional):') || '';
+    setBusy(true);
+    try { await BE.adminAddService({ name, provider, bc, cat, desc }); S.toast({ msg: 'Service added' }); }
+    catch (e) { S.toast({ msg: 'Add failed — admin only', icon: 'wallet' }); console.warn(e); }
+    setBusy(false);
+  };
+  const addPack = async () => {
+    const name = prompt('Coin pack name (e.g. Starter):'); if (!name) return;
+    const coins = parseInt(prompt('Base coins granted:', '500') || '0', 10);
+    const bonus = parseInt(prompt('Bonus coins (0 for none):', '0') || '0', 10);
+    const priceInr = parseInt(prompt('Real price in ₹ (rupees):', '499') || '0', 10);
+    setBusy(true);
+    try { await BE.adminAddPack({ name, coins, bonus, priceInr }); S.toast({ msg: 'Coin pack added' }); }
+    catch (e) { S.toast({ msg: 'Add failed — admin only', icon: 'wallet' }); console.warn(e); }
+    setBusy(false);
+  };
+  const editZone = async () => {
+    const existing = S.zones || [];
+    const id = (prompt('Zone slug to add/edit (e.g. camp, room, or a new one):', existing[0] ? existing[0].id : 'camp') || '').trim().toLowerCase();
+    if (!id) return;
+    const cur = existing.find((z) => z.id === id) || {};
+    const name = prompt('Zone name:', cur.name || '') || cur.name || id;
+    const desc = prompt('Description:', cur.desc || '') || (cur.desc || '');
+    const cost = parseInt(prompt('Check-in cost in BeingCoin (0 = free):', String(cur.cost ?? 0)) || '0', 10);
+    const minRank = parseInt(prompt('Minimum rank 0–4 (0 Visitor · 1 Recruit · 2 Builder · 3 Maker · 4 Chief):', String(cur.minRank ?? 0)) || '0', 10);
+    const bookable = /^y/i.test(prompt('Bookable for sessions? (y/n):', cur.bookable ? 'y' : 'n') || 'n');
+    setBusy(true);
+    try { await BE.adminUpsertZone({ id, name, desc, cost, minRank, bookable }); S.toast({ msg: `Zone “${name}” saved` }); }
+    catch (e) { S.toast({ msg: 'Save failed — admin only', icon: 'wallet' }); console.warn(e); }
+    setBusy(false);
+  };
+
   // Weekly digest as copyable text — paste into WhatsApp/email until the
   // outbound-email hookup lands (externals ship last, by design).
   const copyDigest = () => {
@@ -914,6 +964,17 @@ function DesktopAdmin({ S }) {
           <DeskStat icon="lock" label="House treasury" value={fmt(metrics.treasury || 0)} tone="var(--gold)" sub="15% platform fees" />
         </div>
       )}
+
+      <DeskSectionHead label="Catalog" />
+      <DeskCard style={{ padding: '16px 20px', marginBottom: 8 }}>
+        <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12.5, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.5 }}>Set up the real content of the Camp — store items, services, coin top-up packs, and the check-in cost/rank of each zone. New entries appear for members on their next refresh.</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Btn variant="outline" icon="bag" onClick={addProduct}>Add product</Btn>
+          <Btn variant="outline" icon="briefcase" onClick={addService}>Add service</Btn>
+          <Btn variant="outline" icon="wallet" onClick={addPack}>Add coin pack</Btn>
+          <Btn variant="outline" icon="scan" onClick={editZone}>Add / edit zone</Btn>
+        </div>
+      </DeskCard>
 
       <DeskSectionHead label={`Members${members ? ` · ${members.length}` : ''}`} action="Reload" onAction={reload} />
       <div style={{ marginBottom: 10 }}>

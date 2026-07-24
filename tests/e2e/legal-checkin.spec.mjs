@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { seedEntered, openHome } from './helpers.mjs';
+import { seedEntered } from './helpers.mjs';
 
 /**
  * Standalone legal pages (no account needed) and the zone QR deep-link

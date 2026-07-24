@@ -143,7 +143,8 @@ function useBeingCamp(t) {
     try { zid = new URLSearchParams(window.location.search).get('checkin'); } catch (e) { zid = null; }
     if (!zid) return;
     try { window.history.replaceState({}, '', window.location.pathname); } catch (e) { /* ignore */ }
-    const zone = (typeof ZONES !== 'undefined' ? ZONES : []).find((z) => String(z.id) === zid);
+    const zoneList = (catalog && catalog.zones && catalog.zones.length) ? catalog.zones : (typeof ZONES !== 'undefined' ? ZONES : []);
+    const zone = zoneList.find((z) => String(z.id) === zid);
     const label = zone ? zone.name : 'the zone';
     if (BE && BE.syncCheckin) {
       BE.syncCheckin(zid)
@@ -180,6 +181,7 @@ function useBeingCamp(t) {
     products: (catalog && catalog.products) || (typeof PRODUCTS !== 'undefined' ? PRODUCTS : []),
     storeCats: (catalog && catalog.storeCats) || (typeof STORE_CATS !== 'undefined' ? STORE_CATS : ['All']),
     services: (catalog && catalog.services) || (typeof SERVICES !== 'undefined' ? SERVICES : []),
+    zones: (catalog && catalog.zones && catalog.zones.length) ? catalog.zones : (typeof ZONES !== 'undefined' ? ZONES : []),
     openWork: (() => {
       const raw = (catalog && catalog.openWork) || (typeof OPEN_WORK !== 'undefined' ? OPEN_WORK : []);
       // Matched-to-your-craft briefs first — makers see their industry's work

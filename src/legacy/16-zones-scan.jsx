@@ -2,7 +2,7 @@
 
 function ScanScreen({ S }) {
   const active = (S.workspaces || []).filter((w) => w.stage < 4);
-  const bookable = ZONES.filter((z) => z.id === 'room' || z.id === 'camp' || z.id === 'inner');
+  const zones = S.zones || ZONES;
   return (
     <div style={{ animation: 'screenIn .3s ease' }}>
       <ScreenHead title="ZONES" sub="Scan to enter" onBack={S.back} right={<WalletChip S={S} />} />
@@ -44,9 +44,9 @@ function ScanScreen({ S }) {
         </Card>
       )}
 
-      <Eyebrow line style={{ margin: '24px 0 14px' }}>The six zones</Eyebrow>
+      <Eyebrow line style={{ margin: '24px 0 14px' }}>{zones.length === 6 ? 'The six zones' : 'Zones'}</Eyebrow>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
-        {ZONES.map((z) => {
+        {zones.map((z) => {
           const locked = S.rankIndex < z.minRank;
           return (
             <div key={z.id} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -131,7 +131,7 @@ function CheckRow({ ok, label, value }) {
 
 // ── Book a zone for a project session ───────────────────────────────
 function BookZoneSheet({ S, workspaces, onClose }) {
-  const rooms = ZONES.filter((z) => ['camp', 'room', 'inner'].includes(z.id));
+  const rooms = (S.zones || ZONES).filter((z) => ['camp', 'room', 'inner'].includes(z.id));
   const slots = ['Today · 4:00 PM', 'Tomorrow · 11:00 AM', 'Tomorrow · 3:00 PM', 'Fri · 10:00 AM'];
   const [proj, setProj] = React.useState(workspaces[0]);
   const [zone, setZone] = React.useState(rooms[1]);
