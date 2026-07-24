@@ -41,6 +41,8 @@ function useBeingCamp(t) {
   const [claimedSeats, setClaimedSeats] = React.useState(saved.claimedSeats ?? []);
   const [serverRank, setServerRank] = React.useState(null); // live rank from the DB (levels auto-earned)
   const [completions, setCompletions] = React.useState(null); // live track record (null → derive from workspaces)
+  const [authed, setAuthed] = React.useState(false); // has a Supabase session (email account)
+  const [booting, setBooting] = React.useState(!!BE); // gate first paint until boot resolves (backend only)
   const [toastData, setToastData] = React.useState(null);
   const rankIndex = serverRank != null ? serverRank : Math.max(0, Math.min(4, t.rankIndex ?? 1));
 
@@ -85,6 +87,7 @@ function useBeingCamp(t) {
     BE.boot().then((b) => {
       if (!alive) return;
       if (b) {
+        // A session exists. Hydrate identity + wallet from the server.
         if (b.profile) setProfile(b.profile);
         setBalance(b.balance);
         setActivityCoins(b.activityCoins);
@@ -95,20 +98,24 @@ function useBeingCamp(t) {
         setIsStaff(!!b.isStaff);
         setTeamRole(b.teamRole || null);
         if (typeof b.rankIndex === 'number') setServerRank(b.rankIndex);
-        setEntered(true);
+        setAuthed(true);
+        // Enter the app only when the professional profile is complete;
+        // a brand-new email account still needs to pick its category/skills.
+        setEntered(!!b.onboarded);
         // Track record: delivered work, earnings and scores from the DB.
-        if (BE.listCompletions) BE.listCompletions().then((rows) => {
+        if (b.onboarded && BE.listCompletions) BE.listCompletions().then((rows) => {
           if (alive && rows && rows.length) setCompletions(rows.map((r) => ({
             id: String(r.id), title: String(r.title), role: String(r.role), cat: r.cat ? String(r.cat) : null,
             coins: Number(r.coins_earned || 0), score: r.score ? Number(r.score) : null, completed: !!r.completed,
           })));
         }).catch(() => {});
-      } else if (entered && profile) {
-        // Entered locally but no server account (e.g. sign-ins were disabled
-        // when onboarding ran) — establish one now with the saved identity.
-        mirror(BE.signIn(profile, balance));
+      } else {
+        // No session → everyone signs in with email + password.
+        setAuthed(false);
+        setEntered(false);
       }
-    }).catch((e) => console.warn('[beingcamp] backend boot failed:', e));
+      setBooting(false);
+    }).catch((e) => { console.warn('[beingcamp] backend boot failed:', e); setBooting(false); });
     // Live bell: new notifications stream in without a reload.
     let unsub = null;
     if (BE.subscribeNotifications) {
@@ -350,8 +357,9 @@ function useBeingCamp(t) {
       }, ...prev]);
       if (BE) mirror(BE.syncPublication({ type, title, author: p.name }));
     },
+    authed, booting,
     enter: (newProfile) => { if (newProfile) setProfile(newProfile); setEntered(true); setTab('home'); if (BE) mirror(BE.signIn(newProfile || p, fresh ? 100 : balance)); },
-    signOut: () => { setEntered(false); setStack([]); setTab('home'); if (BE) mirror(BE.signOut()); },
+    signOut: () => { setEntered(false); setAuthed(false); setStack([]); setTab('home'); if (BE) mirror(BE.signOut()); },
     resetDemo: () => { localStorage.removeItem(PKEY); location.reload(); },
     topScreen: stack.length ? stack[stack.length - 1].screen : null,
     topPayload: stack.length ? stack[stack.length - 1].payload : {},
@@ -395,8 +403,18 @@ function BeingCampApp({ t }) {
   const scrollRef = React.useRef(null);
   React.useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }, [S.tab, S.topScreen]);
 
+  // Backend mode: hold the first paint until we know if there's a session,
+  // so a returning member never flashes the sign-in screen.
+  if (S.booting) {
+    return (
+      <div style={{ height: '100%', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ animation: 'coinPop .6s ease' }}><CoinMark size={54} glow /></div>
+      </div>
+    );
+  }
+
   if (!S.entered) {
-    return <div style={{ height: '100%', background: 'var(--bg)' }}><Onboarding onComplete={(profile) => S.enter(profile)} /></div>;
+    return <div style={{ height: '100%', background: 'var(--bg)' }}><Onboarding authed={S.authed} onComplete={(profile) => S.enter(profile)} /></div>;
   }
 
   return (

@@ -16,11 +16,6 @@ function Splash({ onNext }) {
       </div>
       <div style={{ position: 'relative' }}>
         <Btn variant="primary" size="lg" full icon="arrowR" onClick={onNext}>Enter the Camp</Btn>
-        {typeof window !== 'undefined' && window.BeingCampBackend && window.BeingCampBackend.enabled && (
-          <div style={{ textAlign: 'center', marginTop: 12 }}>
-            <button className="tap" onClick={onTeam} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 600, fontSize: 12, color: 'var(--muted)' }}>Team &amp; admin sign-in</button>
-          </div>
-        )}
         <div style={{ textAlign: 'center', marginTop: 14, fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '0.1em', color: 'var(--dim)' }}>
           A subsidiary of ADALINE THE AGENCY
         </div>
@@ -272,17 +267,19 @@ function ProfileSetup({ path, onDone }) {
   );
 }
 
-function Onboarding({ onComplete }) {
-  // One simple sign-in for every BeingCamp member: your name is enough. Every
-  // member can both do work and bring work — the fork just sets your home.
-  // The super admin + promoted team use the discreet email/password login.
+function Onboarding({ onComplete, authed }) {
+  // Everyone signs in with email + password — one account, every device. New
+  // accounts are created on first sign-in, then complete a professional profile
+  // (category → skills). The super admin is crowned automatically by email.
+  const BE = (typeof window !== 'undefined') ? window.BeingCampBackend : null;
+  const needAuth = !!(BE && BE.enabled) && !authed; // demo/local mode skips auth
   const [step, setStep] = React.useState('splash');
   const [path, setPath] = React.useState('maker');
   const [profile, setProfile] = React.useState(null);
   return (
     <div key={step} style={{ height: '100%', paddingTop: 38, animation: 'screenIn .4s ease' }}>
-      {step === 'splash' && <Splash onNext={() => setStep('fork')} onTeam={() => setStep('signin')} />}
-      {step === 'signin' && <TeamSignIn onBack={() => setStep('splash')} />}
+      {step === 'splash' && <Splash onNext={() => setStep(needAuth ? 'auth' : 'fork')} />}
+      {step === 'auth' && <AuthStep onBack={() => setStep('splash')} />}
       {step === 'fork' && <ForkStep onPick={(r) => { setPath(r); setStep('setup'); }} />}
       {step === 'setup' && <ProfileSetup path={path} onDone={(prof) => { setProfile(prof); setStep('init'); }} />}
       {step === 'init' && <InitiationCamper path={path} onDone={() => onComplete(profile)} />}
@@ -290,10 +287,10 @@ function Onboarding({ onComplete }) {
   );
 }
 
-// ── Team & admin sign-in: email + password for the super admin and any
-// member promoted into the internal team. Members never see this by default;
-// it's the discreet door for cross-device, role-carrying accounts. ────────
-function TeamSignIn({ onBack }) {
+// ── Sign in / create account: email + password for every member. First
+// sign-in with a new email creates the account; returning members land in the
+// app. The super admin is auto-crowned by email (0016). ───────────────────
+function AuthStep({ onBack }) {
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [busy, setBusy] = React.useState(false);
@@ -304,32 +301,33 @@ function TeamSignIn({ onBack }) {
     try {
       const ok = await window.BeingCampBackend.teamSignIn(email.trim().toLowerCase(), password);
       if (ok) {
-        try { localStorage.setItem('beingcamp_v3', JSON.stringify({ entered: true })); } catch (e) { /* storage off */ }
-        location.reload(); // boot() hydrates the account (admin/staff flags + wallet) from the server
+        location.reload(); // boot() hydrates the account (wallet + role) and routes to profile/app
       } else {
-        setErr('Sign-in failed. If this is a new account, it is created on first sign-in — check the password is 6+ characters.');
+        setErr('Sign-in failed. A new account is created automatically on first sign-in — check the password is 6+ characters.');
       }
     } catch (e) {
       const m = String((e && e.message) || 'Sign-in failed');
-      setErr(/confirm/i.test(m) ? 'This project still requires email confirmation — ask the admin to turn it off.' : m);
+      setErr(/confirm/i.test(m) ? 'This project still needs “Confirm email” turned off in Supabase Auth.'
+        : /invalid login/i.test(m) ? 'Wrong password for this email. Try again.'
+        : m);
     }
     setBusy(false);
   };
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: '64px 26px 30px', animation: 'screenIn .3s ease' }}>
       <button className="tap" aria-label="Back" onClick={onBack} style={{ width: 38, height: 38, borderRadius: 12, background: 'var(--surface)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', marginBottom: 20 }}><Icon name="back" size={19} color="var(--text)" /></button>
-      <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--gold)' }}>BeingCamp · Team &amp; admin</div>
-      <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, fontSize: 30, letterSpacing: '-0.01em', color: 'var(--text)', margin: '10px 0 6px' }}>Sign in</div>
-      <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginBottom: 24, lineHeight: 1.5 }}>For the super admin and members given team access. One account, every device.</div>
+      <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--gold)' }}>BeingCamp</div>
+      <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, fontSize: 30, letterSpacing: '-0.01em', color: 'var(--text)', margin: '10px 0 6px' }}>Sign in or join</div>
+      <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginBottom: 24, lineHeight: 1.5 }}>Your email is your BeingCamp account — one login, every device. New here? Just enter an email and pick a password to create it.</div>
       <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 6 }}>Email</div>
-      <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="email" placeholder="you@adaline.digi" onKeyDown={(e) => e.key === 'Enter' && go()}
+      <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="email" placeholder="you@example.com" onKeyDown={(e) => e.key === 'Enter' && go()}
         style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 10, padding: '13px 14px', color: 'var(--text)', fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 14.5, outline: 'none', marginBottom: 14, boxSizing: 'border-box' }} />
       <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 6 }}>Password</div>
-      <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" autoComplete="current-password" placeholder="Your password" onKeyDown={(e) => e.key === 'Enter' && go()}
+      <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" autoComplete="current-password" placeholder="6+ characters" onKeyDown={(e) => e.key === 'Enter' && go()}
         style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 10, padding: '13px 14px', color: 'var(--text)', fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 14.5, outline: 'none', marginBottom: 12, boxSizing: 'border-box' }} />
       {err && <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12.5, color: 'var(--red)', marginBottom: 10, lineHeight: 1.4 }}>{err}</div>}
       <div style={{ flex: 1 }} />
-      <Btn variant="primary" size="lg" full icon="arrowR" disabled={busy} onClick={go}>{busy ? 'Signing in…' : 'Sign in'}</Btn>
+      <Btn variant="primary" size="lg" full icon="arrowR" disabled={busy} onClick={go}>{busy ? 'Signing in…' : 'Continue'}</Btn>
     </div>
   );
 }

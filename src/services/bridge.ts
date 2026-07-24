@@ -62,6 +62,7 @@ interface BootState {
   isStaff: boolean;
   teamRole: string | null;
   rankIndex: number;
+  onboarded: boolean;
   profile: UiProfile | null;
   balance: number;
   activityCoins: number;
@@ -157,6 +158,9 @@ export const backend = {
         isStaff: Boolean((profileRow as Record<string, unknown>).is_staff),
         teamRole: ((profileRow as Record<string, unknown>).team_role as string | null) ?? null,
         rankIndex: Number((profileRow as Record<string, unknown>).rank_index ?? 0),
+        // A finished professional profile has a path or category set; a brand-new
+        // email account has neither yet → route it through profile setup.
+        onboarded: Boolean(profileRow.path || (profileRow as Record<string, unknown>).category),
         profile: rowToProfile(profileRow),
         balance: profileRow.balance,
         activityCoins: profileRow.activity_coins,

@@ -1220,12 +1220,21 @@ function BeingCampDesktop({ t }) {
   const scrollRef = React.useRef(null);
   React.useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }, [S.tab, S.topScreen]);
 
+  // Hold first paint until the session check resolves (backend mode).
+  if (S.booting) {
+    return (
+      <div className="app-desktop" style={{ alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ animation: 'coinPop .6s ease' }}><CoinMark size={58} glow /></div>
+      </div>
+    );
+  }
+
   // First run: the onboarding journey, centered as a card.
   if (!S.entered) {
     return (
       <div className="app-desktop" style={{ alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ width: 402, height: 'min(844px, calc(100vh - 48px))', borderRadius: 26, overflow: 'hidden', border: '1px solid var(--line2)', boxShadow: '0 30px 80px rgba(0,0,0,0.5)', background: 'var(--bg)', position: 'relative' }}>
-          <Onboarding onComplete={(profile) => S.enter(profile)} />
+          <Onboarding authed={S.authed} onComplete={(profile) => S.enter(profile)} />
         </div>
       </div>
     );
