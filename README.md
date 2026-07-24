@@ -119,6 +119,14 @@ The build output (`dist/`) is fully static — host it anywhere.
 - **GitHub Pages** — `.github/workflows/pages.yml` builds and deploys on push to
   `main`. Set `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` as repo **Variables**
   to point the live site at your backend.
+- **Cloudflare Pages** (recommended when your domain is on Cloudflare) — connect
+  the GitHub repo in the Cloudflare dashboard → **Workers & Pages → Create →
+  Pages → Connect to Git**. Build command `npm run build`, output directory
+  `dist`, framework preset **Vite**. The Supabase keys are baked into
+  `src/lib/config.ts`, so no env vars are required to go live. `public/_redirects`
+  provides the SPA fallback. Add your domain under the project's **Custom domains**
+  tab — because the domain is already in Cloudflare, DNS is wired automatically.
+  Our `base` is relative, so the app serves correctly at the domain root.
 - **Vercel** — `vercel.json` is included (framework: vite, SPA rewrites). Add the
   two `VITE_*` env vars in the Vercel project settings.
 
