@@ -142,8 +142,8 @@ function ProfileScreen({ S }) {
 
       {/* menu */}
       <Card pad={4}>
-        {[['bag', 'Orders', `${(S.orders || []).length} total`, 'orders'], ['gift', 'Invite & earn', '+300 BC each', 'referrals'], ['scan', 'Zone access', `${rank.name} level`, 'scan'], ['briefcase', 'Services', 'Book the team', 'services'], ['bell', 'Notifications', S.unreadCount > 0 ? `${S.unreadCount} new` : '', 'notifications'], ['lock', 'Privacy & security', '', null]].map(([ic, t, d, dest], i, a) => (
-          <button key={t} className="tap" onClick={() => dest ? S.go(dest) : S.toast({ msg: t, icon: ic })} style={{ width: '100%', cursor: 'pointer', background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', gap: 12, padding: '14px 12px', borderBottom: i < a.length - 1 ? '1px solid var(--line)' : 'none' }}>
+        {[['bag', 'Orders', `${(S.orders || []).length} total`, 'orders'], ['gift', 'Invite & earn', '+300 BC each', 'referrals'], ['scan', 'Zone access', `${rank.name} level`, 'scan'], ['briefcase', 'Services', 'Book the team', 'services'], ['bell', 'Notifications', S.unreadCount > 0 ? `${S.unreadCount} new` : '', 'notifications'], ['lock', 'Terms & privacy', '', 'legal']].map(([ic, t, d, dest], i, a) => (
+          <button key={t} className="tap" onClick={() => dest === 'legal' ? (window.location.search = '?legal=terms') : dest ? S.go(dest) : S.toast({ msg: t, icon: ic })} style={{ width: '100%', cursor: 'pointer', background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', gap: 12, padding: '14px 12px', borderBottom: i < a.length - 1 ? '1px solid var(--line)' : 'none' }}>
             <Icon name={ic} size={19} color="var(--muted)" />
             <span style={{ flex: 1, textAlign: 'left', fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 600, fontSize: 14, color: 'var(--text)' }}>{t}</span>
             {d && <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 11, color: 'var(--dim)' }}>{d}</span>}
@@ -156,9 +156,6 @@ function ProfileScreen({ S }) {
       <div style={{ textAlign: 'center', fontFamily: 'Space Mono, monospace', fontSize: 9.5, color: 'var(--dim)', marginTop: 16, letterSpacing: '0.08em', lineHeight: 1.6 }}>
         BEINGCAMP v1.0<br/>A subsidiary of Adaline The Agency
       </div>
-      <a href="BeingCamp Authority.html" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 14, textDecoration: 'none', fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--gold)' }}>
-        <Icon name="building" size={13} color="var(--gold)" />Open Authority dashboard<Icon name="arrowUR" size={12} color="var(--gold)" />
-      </a>
       <div style={{ height: 8 }} />
     </div>
   );

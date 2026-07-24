@@ -76,6 +76,11 @@ function Root() {
     () => new URLSearchParams(window.location.search).get('client'), []);
   if (clientToken) return <ClientProjectView token={clientToken} />;
 
+  // Legal pages (?legal=terms | ?legal=privacy): standalone, no account needed.
+  const legal = React.useMemo(
+    () => new URLSearchParams(window.location.search).get('legal'), []);
+  if (legal) return <LegalDoc which={legal} onBack={() => { window.location.search = ''; }} />;
+
   const app = <BeingCampApp t={t} key={`${t.rankIndex}-${t.newMember}`} />;
 
   // Real device (native shell, installed PWA, phone browser): the app IS the screen.

@@ -32,29 +32,41 @@ function ScanScreen({ S }) {
           </div>
         </div>
         <div style={{ padding: 16, textAlign: 'center', borderTop: '1px solid var(--line)' }}>
-          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 15, color: 'var(--text)' }}>Point at a zone QR to check in</div>
-          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>Coins deduct automatically · or pick a zone below</div>
+          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 15, color: 'var(--text)' }}>Scan a zone's QR with your phone camera</div>
+          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>You'll be checked in automatically · or tap a zone below</div>
         </div>
       </Card>
+
+      {(S.isStaff || S.isAdmin) && (
+        <Card pad={14} style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Icon name="qr" size={20} color="var(--gold)" />
+          <div style={{ flex: 1, fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12, color: 'var(--muted)', lineHeight: 1.4 }}>Staff: tap the QR icon on a zone to get its printable check-in code.</div>
+        </Card>
+      )}
 
       <Eyebrow line style={{ margin: '24px 0 14px' }}>The six zones</Eyebrow>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
         {ZONES.map((z) => {
           const locked = S.rankIndex < z.minRank;
           return (
-            <button key={z.id} className="tap" onClick={() => S.openSheet('checkin', { zone: z })} style={{ cursor: 'pointer', textAlign: 'left', width: '100%', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
-              <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, color: z.accent, width: 28, flexShrink: 0 }}>{z.n}</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 15, color: 'var(--text)' }}>{z.name}</span>
-                  <Badge>{z.layer}</Badge>
+            <div key={z.id} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 16, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+              <button className="tap" onClick={() => S.openSheet('checkin', { zone: z })} style={{ flex: 1, minWidth: 0, cursor: 'pointer', textAlign: 'left', background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', gap: 14, padding: 0 }}>
+                <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 22, color: z.accent, width: 28, flexShrink: 0 }}>{z.n}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 15, color: 'var(--text)' }}>{z.name}</span>
+                    <Badge>{z.layer}</Badge>
+                  </div>
+                  <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{z.desc}</div>
                 </div>
-                <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{z.desc}</div>
-              </div>
-              {locked
-                ? <Icon name="lock" size={18} color="var(--red)" />
-                : (z.cost === 0 ? <Badge tone="green">Free</Badge> : <BC amount={z.cost} size={13} />)}
-            </button>
+                {locked
+                  ? <Icon name="lock" size={18} color="var(--red)" />
+                  : (z.cost === 0 ? <Badge tone="green">Free</Badge> : <BC amount={z.cost} size={13} />)}
+              </button>
+              {(S.isStaff || S.isAdmin) && (
+                <button className="tap" aria-label={`${z.name} QR`} title="Zone check-in QR" onClick={() => S.openSheet('zoneQR', { zone: z })} style={{ width: 38, height: 38, borderRadius: 11, background: 'var(--gold-dim)', border: '1px solid var(--gold-line)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}><Icon name="qr" size={18} color="var(--gold)" /></button>
+              )}
+            </div>
           );
         })}
       </div>
@@ -188,4 +200,40 @@ function BookZoneSheet({ S, workspaces, onClose }) {
   );
 }
 
-Object.assign(window, { ScanScreen, CheckinSheet, BookZoneSheet, CheckRow });
+// ── Printable zone QR (staff): members scan it with their phone camera to
+// check in. Encodes <app>/?checkin=<zoneId>. ───────────────────────────────
+function ZoneQRSheet({ S, zone, onClose }) {
+  const [src, setSrc] = React.useState(null);
+  const url = `${location.origin}${location.pathname}?checkin=${zone.id}`;
+  React.useEffect(() => {
+    if (window.BeingCampQR) window.BeingCampQR.toDataURL(url).then(setSrc).catch(() => setSrc(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zone.id]);
+  const copy = () => {
+    const done = () => S.toast({ msg: 'Check-in link copied', icon: 'check' });
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, done);
+    else { window.prompt('Copy the check-in link:', url); done(); }
+  };
+  return (
+    <div style={{ textAlign: 'center' }}>
+      <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 30, color: 'var(--text)', lineHeight: 1 }}>{zone.name}</div>
+      <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginTop: 6, lineHeight: 1.5, padding: '0 6px' }}>
+        Print this and place it at {zone.name}. Members scan it with their phone camera to check in{zone.cost === 0 ? ' · free' : ` · ${fmt(zone.cost)} BC`}{zone.minRank > 0 ? ` · ${RANK_PERKS[zone.minRank].name}+` : ''}.
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'center', margin: '20px 0' }}>
+        <div style={{ background: '#f2efe9', padding: 16, borderRadius: 18, display: 'inline-flex' }}>
+          {src
+            ? <img src={src} alt={`${zone.name} check-in QR`} width={220} height={220} style={{ display: 'block', borderRadius: 8 }} />
+            : <div style={{ width: 220, height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Space Mono, monospace', fontSize: 11, color: '#888' }}>Generating…</div>}
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 10 }}>
+        {src && <a href={src} download={`beingcamp-${zone.id}-qr.png`} style={{ flex: 1, textDecoration: 'none' }}><Btn variant="primary" full icon="arrowUR">Download</Btn></a>}
+        <Btn variant="ghost" full onClick={copy}>Copy link</Btn>
+      </div>
+      <div style={{ marginTop: 10 }}><Btn variant="ghost" full onClick={onClose}>Close</Btn></div>
+    </div>
+  );
+}
+
+Object.assign(window, { ScanScreen, CheckinSheet, BookZoneSheet, CheckRow, ZoneQRSheet });

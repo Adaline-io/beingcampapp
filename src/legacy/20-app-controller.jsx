@@ -133,6 +133,33 @@ function useBeingCamp(t) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Zone QR deep-link (?checkin=<zoneId>): a member scans a printed zone QR
+  // with their phone camera, which opens the app here. Once they're in, run the
+  // check-in server-side (rank + cost enforced by record_checkin) and strip the
+  // param so a refresh doesn't check them in again.
+  React.useEffect(() => {
+    if (!entered) return;
+    let zid = null;
+    try { zid = new URLSearchParams(window.location.search).get('checkin'); } catch (e) { zid = null; }
+    if (!zid) return;
+    try { window.history.replaceState({}, '', window.location.pathname); } catch (e) { /* ignore */ }
+    const zone = (typeof ZONES !== 'undefined' ? ZONES : []).find((z) => String(z.id) === zid);
+    const label = zone ? zone.name : 'the zone';
+    if (BE && BE.syncCheckin) {
+      BE.syncCheckin(zid)
+        .then(() => { toast({ msg: `Checked in · ${label}`, icon: 'scan' }); })
+        .catch((e) => {
+          const m = String((e && e.message) || '');
+          toast({ msg: /rank too low/i.test(m) ? `Locked — higher rank needed for ${label}` : /insufficient/i.test(m) ? 'Not enough coins to check in' : 'Check-in failed — try the QR again', icon: 'lock' });
+        });
+    } else if (zone) {
+      // Demo/local mode: mirror the check-in locally.
+      if (zone.cost > 0) { setBalance((b) => b - zone.cost); pushTxn(`${zone.name} · check-in`, -zone.cost, 'zone'); }
+      toast({ msg: `Checked in · ${zone.name}`, icon: 'scan' });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entered]);
+
   const initialsOf = (name) => (name || 'You').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || 'YOU';
   const p = profile || DEFAULT_PROFILE;
 

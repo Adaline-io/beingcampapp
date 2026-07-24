@@ -40,7 +40,7 @@ function TabBar({ S }) {
 function SheetRouter({ S }) {
   const { name, payload } = S.sheet;
   const close = S.closeSheet;
-  const titles = { product: 'Product', booking: 'Book service', applyWork: 'Apply to join', postWork: 'Post work', gift: 'Gift BeingCoin', checkin: 'Zone check-in', pay: 'Checkout', publish: 'Publish', bookZone: 'Book a space', rsvp: 'Program', hostProgram: 'Host a program', create: 'Start something', editProfile: 'Edit profile' };
+  const titles = { product: 'Product', booking: 'Book service', applyWork: 'Apply to join', postWork: 'Post work', gift: 'Gift BeingCoin', checkin: 'Zone check-in', pay: 'Checkout', publish: 'Publish', bookZone: 'Book a space', rsvp: 'Program', hostProgram: 'Host a program', create: 'Start something', editProfile: 'Edit profile', zoneQR: 'Zone QR' };
   return (
     <Sheet open={!!name} onClose={close} title={titles[name]} full={name === 'product' || name === 'applyWork' || name === 'postWork' || name === 'publish' || name === 'bookZone' || name === 'hostProgram' || name === 'editProfile'}>
       {name === 'product' && <ProductSheet S={S} product={payload.product} onClose={close} />}
@@ -55,6 +55,7 @@ function SheetRouter({ S }) {
       {name === 'gift' && <GiftSheet S={S} to={payload.to} onClose={close} />}
       {name === 'editProfile' && <EditProfileSheet S={S} onClose={close} />}
       {name === 'checkin' && <CheckinSheet S={S} zone={payload.zone} onClose={close} />}
+      {name === 'zoneQR' && <ZoneQRSheet S={S} zone={payload.zone} onClose={close} />}
       {name === 'pay' && <PaySheet S={S} pack={payload.pack} onClose={close} />}
     </Sheet>
   );

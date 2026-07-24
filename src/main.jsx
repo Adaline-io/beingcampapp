@@ -4,11 +4,14 @@ import ReactDOM from 'react-dom/client';
 import Root from 'virtual:beingcamp-app';
 import { logBackendStatus } from './lib/config';
 import { installBackendBridge } from './services/bridge';
+import { installQR } from './lib/qr';
 
 // One-line note in the console so it's obvious whether the real backend is wired.
 logBackendStatus();
 // Expose the Supabase bridge to the design layer (no-op without env keys).
 installBackendBridge();
+// Expose the QR generator (printable zone check-in codes).
+installQR();
 
 // When a new deploy's service worker takes over mid-session, offer a refresh
 // instead of silently serving mixed old/new assets until the next visit.

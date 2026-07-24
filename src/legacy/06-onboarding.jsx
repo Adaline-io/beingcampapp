@@ -295,9 +295,10 @@ function AuthStep({ onBack }) {
   const [password, setPassword] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState(null);
+  const [note, setNote] = React.useState(null); // non-error confirmation (e.g. reset sent)
   const go = async () => {
     if (!email.includes('@') || password.length < 6) { setErr('Enter a valid email and a password of 6+ characters.'); return; }
-    setBusy(true); setErr(null);
+    setBusy(true); setErr(null); setNote(null);
     try {
       const ok = await window.BeingCampBackend.teamSignIn(email.trim().toLowerCase(), password);
       if (ok) {
@@ -313,6 +314,17 @@ function AuthStep({ onBack }) {
     }
     setBusy(false);
   };
+  const forgot = async () => {
+    if (!email.includes('@')) { setErr('Type your email above first, then tap “Forgot password”.'); return; }
+    setBusy(true); setErr(null); setNote(null);
+    try {
+      await window.BeingCampBackend.requestPasswordReset(email.trim().toLowerCase());
+      setNote('Reset link sent to ' + email.trim().toLowerCase() + '. Open it on this device — you’ll be asked to set a new password.');
+    } catch (e) {
+      setErr(String((e && e.message) || 'Could not send the reset email. Try again in a minute.'));
+    }
+    setBusy(false);
+  };
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: '64px 26px 30px', animation: 'screenIn .3s ease' }}>
       <button className="tap" aria-label="Back" onClick={onBack} style={{ width: 38, height: 38, borderRadius: 12, background: 'var(--surface)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', marginBottom: 20 }}><Icon name="back" size={19} color="var(--text)" /></button>
@@ -325,8 +337,13 @@ function AuthStep({ onBack }) {
       <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 6 }}>Password</div>
       <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" autoComplete="current-password" placeholder="6+ characters" onKeyDown={(e) => e.key === 'Enter' && go()}
         style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 10, padding: '13px 14px', color: 'var(--text)', fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 14.5, outline: 'none', marginBottom: 12, boxSizing: 'border-box' }} />
-      {err && <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12.5, color: 'var(--red)', marginBottom: 10, lineHeight: 1.4 }}>{err}</div>}
+      {err && <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12.5, color: 'var(--red)', marginBottom: 8, lineHeight: 1.4 }}>{err}</div>}
+      {note && <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12.5, color: 'var(--green)', marginBottom: 8, lineHeight: 1.4 }}>{note}</div>}
+      <button className="tap" onClick={forgot} disabled={busy} style={{ background: 'none', border: 'none', cursor: busy ? 'default' : 'pointer', padding: 0, textAlign: 'left', fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12.5, fontWeight: 600, color: 'var(--gold)', marginBottom: 4 }}>Forgot password?</button>
       <div style={{ flex: 1 }} />
+      <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 11, color: 'var(--dim)', textAlign: 'center', marginBottom: 12, lineHeight: 1.5 }}>
+        By continuing you agree to our <a href="?legal=terms" style={{ color: 'var(--muted)' }}>Terms</a> &amp; <a href="?legal=privacy" style={{ color: 'var(--muted)' }}>Privacy</a>.
+      </div>
       <Btn variant="primary" size="lg" full icon="arrowR" disabled={busy} onClick={go}>{busy ? 'Signing in…' : 'Continue'}</Btn>
     </div>
   );
