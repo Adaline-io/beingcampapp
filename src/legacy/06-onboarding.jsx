@@ -366,6 +366,14 @@ function TeamSignIn({ onBack }) {
       <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" autoComplete="current-password" placeholder="8+ characters"
         style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 10, padding: '13px 14px', color: 'var(--text)', fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 14.5, outline: 'none', marginBottom: 10 }} />
       {err && <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12.5, color: 'var(--red)', marginBottom: 10, lineHeight: 1.4 }}>{err}</div>}
+      <button className="tap" onClick={async () => {
+        if (!email.includes('@')) { setErr('Type your email above first, then tap forgot password.'); return; }
+        try {
+          await window.BeingCampBackend.requestPasswordReset(email.trim());
+          setErr(null);
+          alert('Reset link sent to ' + email.trim() + ' — open it on this device to set a new password.');
+        } catch (e) { setErr(String((e && e.message) || 'Could not send the reset email.')); }
+      }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left', fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12.5, fontWeight: 600, color: 'var(--gold)' }}>Forgot password?</button>
       <div style={{ flex: 1 }} />
       <Btn variant="primary" size="lg" full icon="arrowR" disabled={busy} onClick={go}>{busy ? 'Signing in…' : 'Sign in'}</Btn>
       <div style={{ marginTop: 10 }}><Btn variant="ghost" full onClick={onBack}>Back</Btn></div>

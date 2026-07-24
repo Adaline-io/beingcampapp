@@ -62,16 +62,43 @@ function WorkspaceRow({ S, w }) {
   );
 }
 
+// One open crew seat — role, project, payout share; claiming is instant.
+function CrewCallCard({ S, c }) {
+  const est = Math.floor((c.budget || 0) * (c.sharePct || 0) / 100);
+  return (
+    <Card pad={14} style={{ marginBottom: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+            <Badge tone="gold">{c.role}</Badge>
+            <Badge tone="grey">{c.cat}</Badge>
+          </div>
+          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 14.5, color: 'var(--text)', lineHeight: 1.3 }}>{c.title}</div>
+          <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10.5, color: 'var(--dim)', marginTop: 4 }}>{c.sharePct}% of each release · ≈{fmt(est)} BC</div>
+        </div>
+        <Btn variant="primary" size="sm" ariaLabel={`Join as ${c.role}`} onClick={() => S.claimSeat(c)}>Join</Btn>
+      </div>
+    </Card>
+  );
+}
+
 function FindWorkList({ S }) {
   const [q, setQ] = React.useState('');
   const ql = q.trim().toLowerCase();
   const list = S.openWork.filter((o) => !ql || [o.title, o.poster, o.cat, o.need, o.desc].join(' ').toLowerCase().includes(ql));
+  const calls = (S.crewCalls || []).filter((c) => !ql || [c.title, c.role, c.cat].join(' ').toLowerCase().includes(ql));
   return (
     <div>
       <div style={{ fontFamily: 'DM Serif Display, serif', fontStyle: 'italic', fontSize: 15, color: 'var(--muted)', marginBottom: 16, lineHeight: 1.5 }}>
         Open work, posted by the community. Apply to join — Authority matches the team.
       </div>
       <SearchBar value={q} onChange={setQ} placeholder="Search work by skill, brand, type…" />
+      {calls.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <Eyebrow style={{ marginBottom: 10 }}>Crew calls · claim a seat</Eyebrow>
+          {calls.map((c) => <CrewCallCard key={c.id} S={S} c={c} />)}
+        </div>
+      )}
       {list.length === 0 && (
         <EmptyState icon="pool" title="No matches" body={`Nothing open matches “${q}” right now. Check back soon — new work is posted often.`} />
       )}
@@ -257,4 +284,4 @@ function PostWorkSheet({ S, onClose }) {
   );
 }
 
-Object.assign(window, { ProjectsScreen, WorkspaceRow, FindWorkList, FindWorkScreen, ApplyWorkSheet, PostWorkSheet });
+Object.assign(window, { ProjectsScreen, WorkspaceRow, CrewCallCard, FindWorkList, FindWorkScreen, ApplyWorkSheet, PostWorkSheet });

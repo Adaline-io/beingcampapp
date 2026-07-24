@@ -174,7 +174,7 @@ export async function getMyProjects() {
   // RLS already scopes rows to projects the caller owns or belongs to.
   const { data, error } = await sb
     .from('projects')
-    .select('*, project_members(*), project_milestones(*)')
+    .select('*, project_members(*, profiles(name)), project_milestones(*), project_roles(*)')
     .order('created_at', { ascending: false });
   if (error) throw error;
   return data;

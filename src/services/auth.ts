@@ -69,6 +69,24 @@ export async function signUpWithPassword(email: string, password: string): Promi
   return data.session;
 }
 
+/**
+ * Email a password-reset link (Supabase's built-in mailer — rate-limited but
+ * fine for a small team; swap in real SMTP later for volume). The link lands
+ * back on the app, where the PASSWORD_RECOVERY handler asks for a new password.
+ */
+export async function requestPasswordReset(email: string, redirectTo: string): Promise<void> {
+  const sb = requireSupabase();
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
+  if (error) throw error;
+}
+
+/** Set a new password for the signed-in (or recovery-session) user. */
+export async function updatePassword(password: string): Promise<void> {
+  const sb = requireSupabase();
+  const { error } = await sb.auth.updateUser({ password });
+  if (error) throw error;
+}
+
 export async function signOut(): Promise<void> {
   if (!supabase) return;
   await supabase.auth.signOut();
@@ -87,12 +105,12 @@ export async function getUser(): Promise<User | null> {
 }
 
 /** Subscribe to auth changes. Returns an unsubscribe function (no-op in local mode). */
-export function onAuthChange(cb: (session: Session | null) => void): () => void {
+export function onAuthChange(cb: (event: string, session: Session | null) => void): () => void {
   if (!supabase) {
-    cb(null);
+    cb('SIGNED_OUT', null);
     return () => {};
   }
-  const { data } = supabase.auth.onAuthStateChange((_event, session) => cb(session));
+  const { data } = supabase.auth.onAuthStateChange((event, session) => cb(event, session));
   return () => data.subscription.unsubscribe();
 }
 

@@ -384,6 +384,26 @@ function DesktopProjects({ S }) {
         })}
       </div>
 
+      {(S.crewCalls || []).length > 0 && (<>
+        <DeskSectionHead label="Crew calls · claim a seat" />
+        <DeskCard style={{ padding: '4px 20px' }}>
+          {S.crewCalls.map((c, i) => {
+            const est = Math.floor((c.budget || 0) * (c.sharePct || 0) / 100);
+            return (
+              <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 0', borderBottom: i < S.crewCalls.length - 1 ? '1px solid var(--line)' : 'none' }}>
+                <Badge tone="gold">{c.role}</Badge>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>{c.title}</div>
+                  <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10.5, color: 'var(--dim)', marginTop: 3 }}>{c.cat} · {c.sharePct}% of each release</div>
+                </div>
+                <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 11.5, color: 'var(--gold)' }}>≈{fmt(est)} BC</span>
+                <Btn variant="primary" size="sm" ariaLabel={`Join as ${c.role}`} onClick={() => S.claimSeat(c)}>Join</Btn>
+              </div>
+            );
+          })}
+        </DeskCard>
+      </>)}
+
       <DeskSectionHead label="Open in the Pool" />
       <DeskCard style={{ padding: '4px 20px' }}>
         {open.map((o, i) => {
@@ -794,6 +814,27 @@ function DesktopAdmin({ S }) {
     catch (e) { S.toast({ msg: 'Staff change failed — apply migration 0008?', icon: 'wallet' }); console.warn(e); }
     setBusy(false);
   };
+  // Weekly digest as copyable text — paste into WhatsApp/email until the
+  // outbound-email hookup lands (externals ship last, by design).
+  const copyDigest = () => {
+    const m = metrics || {};
+    const top = (members || []).slice().sort((a, b) => (b.activity_coins || 0) - (a.activity_coins || 0)).slice(0, 3);
+    const lines = [
+      `BEINGCAMP · weekly digest · ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`,
+      '',
+      `Members: ${m.members ?? '—'} · Check-ins: ${m.checkins ?? '—'} · Projects delivered: ${m.delivered ?? '—'}`,
+      `Coins earned: ${m.earned ?? '—'} BC · spent: ${m.spent ?? '—'} BC · Challenge entries: ${m.entries ?? '—'}`,
+      '',
+      'Top earners:',
+      ...top.map((x, i) => `  ${i + 1}. ${x.name} — ${x.activity_coins || 0} BC`),
+      '',
+      'Sent from the BeingCamp admin desk.',
+    ];
+    const text = lines.join('\n');
+    const done = () => S.toast({ msg: 'Digest copied — paste anywhere', icon: 'check' });
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, done);
+    else { window.prompt('Copy the digest:', text); done(); }
+  };
 
   if (!S.isAdmin) {
     return (
@@ -811,7 +852,8 @@ function DesktopAdmin({ S }) {
           <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 25, color: 'var(--text)', lineHeight: 1 }}>ADMIN</div>
           <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Members, coins, ranks & briefs</div>
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Btn variant="ghost" icon="arrowUR" onClick={copyDigest}>Copy digest</Btn>
           <Btn variant="ghost" icon="calendar" onClick={addWorkshop}>Post program</Btn>
           <Btn variant="ghost" icon="trophy" onClick={addChallenge}>Post challenge</Btn>
           <Btn variant="primary" icon="plus" onClick={addBrief}>Post a brief</Btn>
@@ -951,6 +993,16 @@ function DesktopBoard({ S }) {
     try { await BE.assignTask(t.id, m ? m.id : null); reload(); }
     catch (err) { S.toast({ msg: 'Assign failed', icon: 'wallet' }); console.warn(err); }
   };
+  const [openTask, setOpenTask] = React.useState(null); // card whose thread is open
+  const setDue = async (t) => {
+    const cur = t.due_date || '';
+    const raw = prompt('Due date (YYYY-MM-DD, blank clears):', cur);
+    if (raw === null) return;
+    const val = raw.trim();
+    if (val && !/^\d{4}-\d{2}-\d{2}$/.test(val)) { S.toast({ msg: 'Use YYYY-MM-DD', icon: 'clock' }); return; }
+    try { await BE.setTaskDue(t.id, val || null); reload(); }
+    catch (err) { S.toast({ msg: 'Due failed — apply migration 0011?', icon: 'wallet' }); console.warn(err); }
+  };
 
   if (!S.isStaff && !S.isAdmin) {
     return (
@@ -985,23 +1037,78 @@ function DesktopBoard({ S }) {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minHeight: 60 }}>
                 {tasks === null && <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12, color: 'var(--dim)', padding: 6 }}>Loading…</div>}
-                {col.map((t) => (
+                {col.map((t) => {
+                  // Time-in-column: how long this card has sat in its status.
+                  const sinceMs = Date.parse(t.status_changed_at || t.created_at || '') || Date.now();
+                  const daysIn = Math.floor((Date.now() - sinceMs) / 86400000);
+                  const overdue = t.due_date && t.status !== 'done' && t.due_date < new Date().toISOString().slice(0, 10);
+                  const comments = ((t.task_comments || [])[0] || {}).count || 0;
+                  return (
                   <div key={t.id} className="npc" onClick={() => move(t)} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderLeft: `3px solid ${t.priority === 1 ? 'var(--red)' : t.priority === 3 ? 'var(--dim)' : 'var(--gold)'}`, borderRadius: 10, padding: '10px 12px' }}>
                     <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 12.5, color: 'var(--text)', lineHeight: 1.35 }}>{t.title}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
-                      <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 9, color: 'var(--dim)' }}>{t.sprint} · {t.points}pt</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 9, color: 'var(--dim)' }}>{t.sprint} · {t.points}pt{daysIn >= 1 && key !== 'done' ? ` · ${daysIn}d here` : ''}</span>
+                      <button className="tap" title="Due date" onClick={(e) => { e.stopPropagation(); setDue(t); }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'Space Mono, monospace', fontSize: 9, color: overdue ? 'var(--red)' : t.due_date ? 'var(--gold)' : 'var(--dim)' }}>
+                        {t.due_date ? `due ${t.due_date.slice(5)}` : '+due'}
+                      </button>
+                      <button className="tap" title="Comments" onClick={(e) => { e.stopPropagation(); setOpenTask(openTask && openTask.id === t.id ? null : t); }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'Space Mono, monospace', fontSize: 9, color: comments ? 'var(--blue)' : 'var(--dim)' }}>
+                        ✎{comments || ''}
+                      </button>
                       <button className="tap" onClick={(e) => assign(t, e)} title="Assign" style={{ marginLeft: 'auto', width: 22, height: 22, borderRadius: 7, background: t.assignee ? 'var(--gold-dim)' : 'var(--panel)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, fontSize: 8.5, color: t.assignee ? 'var(--gold)' : 'var(--dim)' }}>
                         {t.assignee ? initials(t.assignee.name) : '+'}
                       </button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           );
         })}
       </div>
+      {openTask && <TaskThread BE={BE} S={S} task={openTask} onClose={() => setOpenTask(null)} onChanged={reload} />}
     </div>
+  );
+}
+
+// Comment thread for one board card — loads on open, posts inline.
+function TaskThread({ BE, S, task, onClose, onChanged }) {
+  const [comments, setComments] = React.useState(null);
+  const [draft, setDraft] = React.useState('');
+  const load = React.useCallback(() => {
+    BE.listTaskComments(task.id).then(setComments).catch((e) => { console.warn(e); setComments([]); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task.id]);
+  React.useEffect(() => { load(); }, [load]);
+  const post = async () => {
+    const body = draft.trim();
+    if (!body) return;
+    try { await BE.addTaskComment(task.id, body); setDraft(''); load(); onChanged(); }
+    catch (e) { S.toast({ msg: 'Comment failed — apply migration 0011?', icon: 'wallet' }); console.warn(e); }
+  };
+  return (
+    <DeskCard style={{ marginTop: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <span style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>{task.title}</span>
+        <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'var(--dim)' }}>{task.sprint} · {task.points}pt{task.due_date ? ` · due ${task.due_date}` : ''}</span>
+        <button className="tap" aria-label="Close thread" onClick={onClose} style={{ marginLeft: 'auto', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--dim)', fontFamily: 'Space Mono, monospace', fontSize: 12 }}>✕</button>
+      </div>
+      {comments === null ? (
+        <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12.5, color: 'var(--dim)' }}>Loading thread…</div>
+      ) : comments.length === 0 ? (
+        <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12.5, color: 'var(--dim)' }}>No comments yet — start the thread.</div>
+      ) : comments.map((c) => (
+        <div key={c.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--line)' }}>
+          <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 9.5, color: 'var(--gold)', marginBottom: 3 }}>{(c.author && c.author.name) || 'Member'}</div>
+          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--text)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{c.body}</div>
+        </div>
+      ))}
+      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+        <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && post()} placeholder="Write a comment…" aria-label="Comment"
+          style={{ flex: 1, background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px', fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--text)', outline: 'none' }} />
+        <Btn variant="primary" size="sm" onClick={post}>Post</Btn>
+      </div>
+    </DeskCard>
   );
 }
 

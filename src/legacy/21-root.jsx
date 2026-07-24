@@ -70,6 +70,12 @@ function Root() {
     return () => window.removeEventListener('resize', fit);
   }, [platform.fullBleed, platform.frame]);
 
+  // Client share link (?client=<token>): the read-only project window, no
+  // account needed — it replaces the whole app for that visit.
+  const clientToken = React.useMemo(
+    () => new URLSearchParams(window.location.search).get('client'), []);
+  if (clientToken) return <ClientProjectView token={clientToken} />;
+
   const app = <BeingCampApp t={t} key={`${t.rankIndex}-${t.newMember}`} />;
 
   // Real device (native shell, installed PWA, phone browser): the app IS the screen.

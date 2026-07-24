@@ -38,12 +38,14 @@ function useBeingCamp(t) {
   const [isStaff, setIsStaff] = React.useState(false);
   const [teamRole, setTeamRole] = React.useState(null);
   const [joinedChallenges, setJoinedChallenges] = React.useState(saved.joinedChallenges ?? []);
+  const [claimedSeats, setClaimedSeats] = React.useState(saved.claimedSeats ?? []);
+  const [serverRank, setServerRank] = React.useState(null); // live rank from the DB (levels auto-earned)
   const [toastData, setToastData] = React.useState(null);
-  const rankIndex = Math.max(0, Math.min(4, t.rankIndex ?? 1));
+  const rankIndex = serverRank != null ? serverRank : Math.max(0, Math.min(4, t.rankIndex ?? 1));
 
   React.useEffect(() => {
-    localStorage.setItem(PKEY, JSON.stringify({ entered, balance, activityCoins, txns, appliedWork, orders, workspaces, publications, notifs, attending, programs, profile, joinedChallenges }));
-  }, [entered, balance, activityCoins, txns, appliedWork, orders, workspaces, publications, notifs, attending, programs, profile, joinedChallenges]);
+    localStorage.setItem(PKEY, JSON.stringify({ entered, balance, activityCoins, txns, appliedWork, orders, workspaces, publications, notifs, attending, programs, profile, joinedChallenges, claimedSeats }));
+  }, [entered, balance, activityCoins, txns, appliedWork, orders, workspaces, publications, notifs, attending, programs, profile, joinedChallenges, claimedSeats]);
 
   // Live mode: the public catalog (packs, store, services, briefs) comes from
   // the database — no session needed; demo catalog stays as the fallback.
@@ -91,6 +93,7 @@ function useBeingCamp(t) {
         setIsAdmin(!!b.isAdmin);
         setIsStaff(!!b.isStaff);
         setTeamRole(b.teamRole || null);
+        if (typeof b.rankIndex === 'number') setServerRank(b.rankIndex);
         setEntered(true);
       } else if (entered && profile) {
         // Entered locally but no server account (e.g. sign-ins were disabled
@@ -132,6 +135,40 @@ function useBeingCamp(t) {
         : raw;
     })(),
     myIndustries: (typeof industriesForProfile !== 'undefined') ? industriesForProfile(p) : [],
+    // Dispatch feed: open crew seats, matched-to-your-craft first, claimed hidden.
+    crewCalls: (() => {
+      const raw = (catalog && catalog.crewCalls) || (typeof CREW_CALLS !== 'undefined' ? CREW_CALLS : []);
+      const open = raw.filter((c) => !claimedSeats.includes(c.id));
+      const mine = (typeof industriesForProfile !== 'undefined') ? industriesForProfile(p) : [];
+      return (typeof forYouFirst !== 'undefined')
+        ? forYouFirst(open, mine, (c) => (typeof CAT_TO_INDUSTRY !== 'undefined' && CAT_TO_INDUSTRY[c.cat]) || (typeof INDUSTRIES !== 'undefined' && (INDUSTRIES.find((x) => x.name === c.cat) || {}).id) || c.cat)
+        : open;
+    })(),
+    claimSeat: (call) => {
+      setClaimedSeats((prev) => prev.includes(call.id) ? prev : [...prev, call.id]);
+      toast({ msg: `You're on the crew · ${call.role}`, icon: 'check' });
+      if (BE && BE.claimRole && /^[0-9a-f-]{36}$/i.test(call.id)) {
+        // Live: the RPC locks the seat atomically, then we rehydrate projects
+        // so the new workspace shows up with real team + milestones.
+        BE.claimRole(call.id)
+          .then(() => BE.boot())
+          .then((b) => { if (b && b.projects) setWorkspaces(b.projects); })
+          .catch((e) => { console.warn('[beingcamp] claim failed:', e); toast({ msg: 'Seat already taken — pick another', icon: 'lock' }); });
+      } else {
+        // Demo: open a member-side workspace for the claimed seat.
+        setWorkspaces((prev) => [{
+          id: 'cw' + Date.now(), title: call.title, poster: 'The Pool', cat: call.cat,
+          you: 'member', role: call.role, stage: 2, budget: call.budget, escrowReleased: 0,
+          deadline: 'In progress', team: [{ name: 'You', role: call.role, you: true }],
+          seats: [], shortlist: [],
+          milestones: [
+            { name: 'Kickoff', bc: Math.round(call.budget * 0.3), status: 'active' },
+            { name: 'Delivery', bc: call.budget - Math.round(call.budget * 0.3), status: 'todo' },
+          ],
+          chat: [], files: [], schedule: [],
+        }, ...prev]);
+      }
+    },
     leaders: (catalog && catalog.leaders && catalog.leaders.length ? catalog.leaders : null),
     isAdmin, isStaff, teamRole,
     joinedChallenges,
@@ -193,8 +230,12 @@ function useBeingCamp(t) {
           { name: 'Final delivery', bc: budget - Math.round(budget * 0.4) - Math.round(budget * 0.35), status: 'todo' },
         ];
       }
+      // Crew seats: one open seat per template role, payout shares split equally
+      // (lead takes the rounding remainder). These become claimable crew calls.
+      const roles = (template && template.roles && typeof crewSharesFor !== 'undefined')
+        ? crewSharesFor(template.roles) : [];
       if (BE) {
-        BE.syncProject({ title, cat, budget, milestones })
+        BE.syncProject({ title, cat, budget, milestones, roles })
           .then((w) => { if (w) setWorkspaces((prev) => prev.map((x) => x.id === tempId ? { ...w, shortlist: x.shortlist, chat: x.chat } : x)); })
           .catch((e) => console.warn('[beingcamp] project sync failed:', e));
       }
@@ -202,6 +243,7 @@ function useBeingCamp(t) {
       id: tempId, title, poster: 'You', cat,
       you: 'poster', role: 'Poster', stage: 1, budget, escrowReleased: 0, deadline: 'Confirm team',
       team: [],
+      seats: roles.map((r) => ({ role: r.role, sharePct: r.sharePct, filled: false })),
       shortlist: [
         { name: 'Devika S.', role: 'Lead', rank: 'Maker', match: 93, pitch: 'I can lead this end-to-end and bring the right people in.' },
         { name: 'Arjun M.', role: 'Specialist', rank: 'Builder', match: 80, pitch: 'Available now, fast and reliable on delivery.' },

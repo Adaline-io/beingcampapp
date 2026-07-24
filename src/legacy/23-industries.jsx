@@ -73,6 +73,26 @@ const CHALLENGES = [
 
 function industryOf(id) { return INDUSTRIES.find((x) => x.id === id) || INDUSTRIES[0]; }
 
+// ── Dispatch: crew seats + payout shares ────────────────────────────────
+// Each posted project opens one seat per template role. Shares are the
+// ratio used by the escrow release (milestone amount × share ÷ total), so
+// an equal split is the default; the lead absorbs the rounding remainder.
+function crewSharesFor(roles) {
+  const n = roles.length;
+  if (!n) return [];
+  const base = Math.floor(100 / n);
+  return roles.map((role, i) => ({ role, sharePct: i === 0 ? 100 - base * (n - 1) : base }));
+}
+
+// Demo crew calls — the local-mode dispatch feed (live mode loads real
+// open seats from the database instead).
+const CREW_CALLS = [
+  { id: 'cc1', role: 'Editor', sharePct: 30, projectId: 'demo1', title: 'Backwater wedding film — final cut', cat: 'Film & Video', budget: 2400 },
+  { id: 'cc2', role: 'Frontend dev', sharePct: 34, projectId: 'demo2', title: 'Café ordering site', cat: 'Tech', budget: 1800 },
+  { id: 'cc3', role: 'Illustrator', sharePct: 33, projectId: 'demo3', title: 'Monsoon gig poster series', cat: 'Design', budget: 900 },
+  { id: 'cc4', role: 'Sound', sharePct: 20, projectId: 'demo1', title: 'Backwater wedding film — final cut', cat: 'Film & Video', budget: 2400 },
+];
+
 // ── Personalization: use cases follow the member's craft, not everyone
 // gets everything. Skills chosen at onboarding map to industries; matched
 // briefs/challenges surface first for that member.
@@ -162,4 +182,4 @@ function DesktopChallenges({ S }) {
   );
 }
 
-Object.assign(window, { INDUSTRIES, CHALLENGES, industryOf, industriesForProfile, forYouFirst, CAT_TO_INDUSTRY, ChallengesScreen, DesktopChallenges });
+Object.assign(window, { INDUSTRIES, CHALLENGES, CREW_CALLS, industryOf, industriesForProfile, forYouFirst, crewSharesFor, CAT_TO_INDUSTRY, ChallengesScreen, DesktopChallenges });

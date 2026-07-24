@@ -26,11 +26,12 @@ Pages), installable PWA, and native iOS/Android via Capacitor.
 - `src/lib/` + `src/services/` — typed TypeScript: config, Supabase client,
   auth/data services, and `bridge.ts` (mirrors app actions to the backend
   when configured; app works fully offline/demo without it).
-- `supabase/` — schema migrations (17 tables), RLS policies, atomic wallet
-  RPC (`record_transaction`), seed catalog. Live project: `beingcampapp`
+- `supabase/` — schema migrations (22 tables), RLS policies, atomic wallet
+  RPC (`record_transaction`), dispatch marketplace (crew seats, weighted
+  escrow splits, client tokens), seed catalog. Live project: `beingcampapp`
   (eutcbcbalfnwgqddhdog, keys committed in `src/lib/config.ts` — the anon key
   is publishable by design, protected by RLS).
-- `tests/e2e/` — 17 Playwright tests covering every core flow; CI runs them
+- `tests/e2e/` — 23 Playwright tests covering every core flow; CI runs them
   on every push with `VITE_FORCE_LOCAL=1` so tests never touch production.
 
 ## Commands

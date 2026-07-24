@@ -60,6 +60,7 @@ interface BootState {
   isAdmin: boolean;
   isStaff: boolean;
   teamRole: string | null;
+  rankIndex: number;
   profile: UiProfile | null;
   balance: number;
   activityCoins: number;
@@ -152,11 +153,12 @@ export const backend = {
         isAdmin: Boolean((profileRow as Record<string, unknown>).is_admin),
         isStaff: Boolean((profileRow as Record<string, unknown>).is_staff),
         teamRole: ((profileRow as Record<string, unknown>).team_role as string | null) ?? null,
+        rankIndex: Number((profileRow as Record<string, unknown>).rank_index ?? 0),
         profile: rowToProfile(profileRow),
         balance: profileRow.balance,
         activityCoins: profileRow.activity_coins,
         projects: (projectRows as Array<Record<string, unknown>>).map((r) =>
-          backend.mapProject(r)
+          backend.mapProject(r, userId)
         ),
         txns: (txnRows as Array<Record<string, unknown>>).map((r) => ({
           id: String(r.id),
@@ -192,7 +194,7 @@ export const backend = {
   async loadCatalog(): Promise<Record<string, unknown> | null> {
     if (!isBackendEnabled) return null;
     try {
-      const [packs, products, services, briefs, pubs, workshops, zones, leaders, challengeRows] =
+      const [packs, products, services, briefs, pubs, workshops, zones, leaders, challengeRows, crewRows] =
         await Promise.all([
           data.getCoinPacks(),
           data.getProducts(),
@@ -209,6 +211,17 @@ export const backend = {
               .select('*, challenge_entries(count)')
               .eq('status', 'open')
               .order('created_at', { ascending: false });
+            return rows ?? [];
+          })().catch(() => []),
+          (async () => {
+            // Open crew seats across all projects — the dispatch feed.
+            const { requireSupabase } = await import('../lib/supabase');
+            const { data: rows } = await requireSupabase()
+              .from('project_roles')
+              .select('id, role, share_pct, project_id, projects(title, cat, budget, owner_id)')
+              .eq('status', 'open')
+              .order('created_at', { ascending: false })
+              .limit(50);
             return rows ?? [];
           })().catch(() => []),
         ]);
@@ -328,7 +341,24 @@ export const backend = {
         ),
       }));
 
+      const uiCrewCalls = (crewRows as Array<Record<string, unknown>>)
+        .filter((r) => r.projects)
+        .map((r) => {
+          const p = r.projects as Record<string, unknown>;
+          return {
+            id: String(r.id),
+            role: String(r.role),
+            sharePct: Number(r.share_pct ?? 0),
+            projectId: String(r.project_id),
+            title: String(p.title),
+            cat: String(p.cat ?? 'Branding'),
+            budget: Number(p.budget ?? 0),
+            ownerId: String(p.owner_id ?? ''),
+          };
+        });
+
       return {
+        crewCalls: uiCrewCalls,
         challenges: uiChallenges,
         packs: uiPacks,
         products: uiProducts,
@@ -480,9 +510,11 @@ export const backend = {
     cat: string;
     budget: number;
     milestones: Array<{ name: string; bc: number }>;
+    roles?: Array<{ role: string; sharePct: number }>;
   }): Promise<Record<string, unknown> | null> {
     if (!isBackendEnabled) return null;
-    if (!(await currentUserId())) return null;
+    const me = await currentUserId();
+    if (!me) return null;
     const { requireSupabase } = await import('../lib/supabase');
     const sb = requireSupabase();
     const { data: projectId, error } = await sb.rpc('create_project', {
@@ -490,15 +522,38 @@ export const backend = {
       p_cat: input.cat,
       p_budget: Math.round(input.budget),
       p_milestones: input.milestones.map((m) => ({ label: m.name, amount: Math.round(m.bc) })),
+      p_roles: (input.roles ?? []).map((r) => ({ role: r.role, share_pct: Math.round(r.sharePct) })),
     });
     if (error) throw error;
     const { data: rows, error: qErr } = await sb
       .from('projects')
-      .select('*, project_milestones(*), project_members(*)')
+      .select('*, project_milestones(*), project_members(*, profiles(name)), project_roles(*)')
       .eq('id', projectId as string);
     if (qErr) throw qErr;
     const row = rows?.[0];
-    return row ? this.mapProject(row as Record<string, unknown>) : null;
+    return row ? this.mapProject(row as Record<string, unknown>, me) : null;
+  },
+
+  /** Claim an open crew seat (claim_role RPC: locks the row, joins the team). */
+  async claimRole(roleId: string): Promise<Record<string, unknown> | null> {
+    if (!isBackendEnabled) return null;
+    const { requireSupabase } = await import('../lib/supabase');
+    const { data: result, error } = await requireSupabase().rpc('claim_role', {
+      p_role_id: roleId,
+    });
+    if (error) throw error;
+    return (result as Record<string, unknown>) ?? null;
+  },
+
+  /** Token-scoped read-only project snapshot for clients (no account needed). */
+  async clientProject(token: string): Promise<Record<string, unknown> | null> {
+    if (!isBackendEnabled) return null;
+    const { requireSupabase } = await import('../lib/supabase');
+    const { data: snapshot, error } = await requireSupabase().rpc('client_project', {
+      p_token: token,
+    });
+    if (error) throw error;
+    return (snapshot as Record<string, unknown>) ?? null;
   },
 
   /** Escrow release for a server-backed milestone (owner-only, paid in SQL). */
@@ -611,7 +666,8 @@ export const backend = {
   async adminMetrics(): Promise<Record<string, number>> {
     const { requireSupabase } = await import('../lib/supabase');
     const sb = requireSupabase();
-    const count = async (table: string, filter?: (q: any) => any) => {
+    type CountQuery = ReturnType<ReturnType<typeof sb.from>['select']>;
+    const count = async (table: string, filter?: (q: CountQuery) => CountQuery) => {
       let q = sb.from(table).select('*', { count: 'exact', head: true });
       if (filter) q = filter(q);
       const { count: n } = await q;
@@ -649,7 +705,7 @@ export const backend = {
     const { requireSupabase } = await import('../lib/supabase');
     const { data: rows, error } = await requireSupabase()
       .from('tasks')
-      .select('*, assignee:profiles!tasks_assignee_id_fkey(name)')
+      .select('*, assignee:profiles!tasks_assignee_id_fkey(name), task_comments(count)')
       .order('priority')
       .order('created_at');
     if (error) throw error;
@@ -681,6 +737,34 @@ export const backend = {
     if (error) throw error;
   },
 
+  /** Set (or clear) a card's due date — 'YYYY-MM-DD' or null. */
+  async setTaskDue(taskId: string, dueDate: string | null): Promise<void> {
+    const { requireSupabase } = await import('../lib/supabase');
+    const { error } = await requireSupabase().from('tasks').update({ due_date: dueDate }).eq('id', taskId);
+    if (error) throw error;
+  },
+
+  /** Comments on a card, oldest first (RLS: staff all, assignee own cards). */
+  async listTaskComments(taskId: string): Promise<Array<Record<string, unknown>>> {
+    const { requireSupabase } = await import('../lib/supabase');
+    const { data: rows, error } = await requireSupabase()
+      .from('task_comments')
+      .select('id, body, created_at, author:profiles!task_comments_author_id_fkey(name)')
+      .eq('task_id', taskId)
+      .order('created_at');
+    if (error) throw error;
+    return rows ?? [];
+  },
+
+  async addTaskComment(taskId: string, body: string): Promise<void> {
+    const userId = await currentUserId();
+    const { requireSupabase } = await import('../lib/supabase');
+    const { error } = await requireSupabase()
+      .from('task_comments')
+      .insert({ task_id: taskId, author_id: userId, body });
+    if (error) throw error;
+  },
+
   /** Set a member's team role label (admin profile-update RLS). */
   async adminSetRole(profileId: string, role: string | null): Promise<void> {
     const { requireSupabase } = await import('../lib/supabase');
@@ -694,6 +778,12 @@ export const backend = {
     let session = await auth.signInWithPassword(email, password).catch(() => null);
     if (!session) session = await auth.signUpWithPassword(email, password);
     return Boolean(session);
+  },
+
+  /** Email a reset link that lands back on this app. */
+  async requestPasswordReset(email: string): Promise<void> {
+    if (!isBackendEnabled) throw new Error('backend not configured');
+    await auth.requestPasswordReset(email, window.location.origin + window.location.pathname);
   },
 
   /* --------------------------------- Admin --------------------------------- */
@@ -765,24 +855,45 @@ export const backend = {
     if (error) throw error;
   },
 
-  /** DB project row (+milestones/members) → the UI workspace shape. */
-  mapProject(row: Record<string, unknown>): Record<string, unknown> {
+  /** DB project row (+milestones/members/roles) → the UI workspace shape. */
+  mapProject(row: Record<string, unknown>, me?: string | null): Record<string, unknown> {
     const ms = ((row.project_milestones as Array<Record<string, unknown>>) ?? [])
       .slice()
       .sort((a, b) => Number(a.sort) - Number(b.sort));
     const firstOpen = ms.findIndex((m) => !m.released);
+    const members = (row.project_members as Array<Record<string, unknown>>) ?? [];
+    const seats = (row.project_roles as Array<Record<string, unknown>>) ?? [];
+    const isOwner = !me || String(row.owner_id ?? '') === me;
+    const myMembership = members.find((m) => String(m.profile_id) === me);
+    const myRole = myMembership ? String(myMembership.role ?? 'Member') : 'Member';
+    const team = members
+      .filter((m) => String(m.role ?? '') !== 'poster')
+      .map((m) => ({
+        name:
+          String(m.profile_id) === me
+            ? 'You'
+            : String((m.profiles as Record<string, unknown> | null)?.name ?? 'Member'),
+        role: String(m.role ?? 'Member'),
+        you: String(m.profile_id) === me,
+      }));
     return {
       id: String(row.id),
       title: String(row.title),
-      poster: 'You',
+      poster: isOwner ? 'You' : 'Poster',
       cat: String(row.cat ?? 'Branding'),
-      you: 'poster',
-      role: 'Poster',
+      you: isOwner ? 'poster' : 'member',
+      role: isOwner ? 'Poster' : myRole,
       stage: Number(row.stage ?? 1),
       budget: Number(row.budget ?? 0),
       escrowReleased: ms.filter((m) => m.released).reduce((s, m) => s + Number(m.amount), 0),
       deadline: 'Open',
-      team: [],
+      team,
+      seats: seats.map((s) => ({
+        role: String(s.role),
+        sharePct: Number(s.share_pct ?? 0),
+        filled: String(s.status) === 'filled',
+      })),
+      clientToken: (row.client_token as string | null) ?? null,
       shortlist: [],
       milestones: ms.map((m, i) => ({
         dbId: String(m.id),
@@ -803,4 +914,18 @@ export const backend = {
  */
 export function installBackendBridge(): void {
   (window as unknown as Record<string, unknown>).BeingCampBackend = backend;
+
+  // Password-recovery landing: the emailed reset link signs the user into a
+  // temporary recovery session and fires this event — set the new password.
+  if (isBackendEnabled) {
+    auth.onAuthChange((event) => {
+      if (event !== 'PASSWORD_RECOVERY') return;
+      const pw = window.prompt('Welcome back — set a new password (8+ characters):');
+      if (!pw || pw.length < 8) return;
+      auth
+        .updatePassword(pw)
+        .then(() => window.alert('Password updated — you are signed in.'))
+        .catch((e) => window.alert('Could not update password: ' + String(e?.message ?? e)));
+    });
+  }
 }

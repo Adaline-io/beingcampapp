@@ -125,6 +125,38 @@ function WSOverview({ S, w, setW }) {
         <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 11.5, color: 'var(--muted)', marginTop: 10, lineHeight: 1.4 }}>{releasedPct}% released · funds unlock to the team as you approve each milestone.</div>
       </Card>
 
+      {/* crew seats: who the dispatch system is still calling for */}
+      {(w.seats || []).length > 0 && (
+        <Card pad={16} style={{ marginBottom: 14 }}>
+          <Eyebrow style={{ marginBottom: 10 }}>Crew seats</Eyebrow>
+          {w.seats.map((s, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: i < w.seats.length - 1 ? '1px solid var(--line)' : 'none' }}>
+              <Icon name={s.filled ? 'checkCircle' : 'clock'} size={15} color={s.filled ? 'var(--green)' : 'var(--dim)'} />
+              <span style={{ flex: 1, fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--text)' }}>{s.role}</span>
+              <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 10.5, color: 'var(--dim)' }}>{s.sharePct}% share</span>
+              <Badge tone={s.filled ? 'green' : 'grey'}>{s.filled ? 'Filled' : 'Open'}</Badge>
+            </div>
+          ))}
+          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 11.5, color: 'var(--muted)', marginTop: 10, lineHeight: 1.4 }}>Open seats appear as crew calls in Find work. Each release splits by these shares.</div>
+        </Card>
+      )}
+
+      {/* client window: share a read-only progress link, no account needed */}
+      {isPoster && w.clientToken && (
+        <Card pad={14} style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Icon name="arrowUR" size={18} color="var(--blue)" />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 13.5, color: 'var(--text)' }}>Client link</div>
+            <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 11.5, color: 'var(--muted)' }}>Read-only progress page — safe to share.</div>
+          </div>
+          <Btn variant="outline" size="sm" onClick={() => {
+            const url = `${location.origin}${location.pathname}?client=${w.clientToken}`;
+            const done = () => S.toast({ msg: 'Client link copied', icon: 'check' });
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, done); else { window.prompt('Copy the client link:', url); done(); }
+          }}>Copy</Btn>
+        </Card>
+      )}
+
       {/* team */}
       {w.team.length > 0 && (<>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '20px 0 12px' }}>

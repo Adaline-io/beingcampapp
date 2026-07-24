@@ -18,6 +18,7 @@ export default tseslint.config(
       'android/**',
       'ios/**',
       'dev-dist/**',
+      '.claude/**', // vendored skill scripts — not our code
     ],
   },
   js.configs.recommended,

@@ -127,7 +127,7 @@ function Badge({ children, tone = 'grey', solid = false, style }) {
 }
 
 // ── Button ──────────────────────────────────────────────────────────
-function Btn({ children, onClick, variant = 'primary', full = false, size = 'md', disabled = false, icon, style }) {
+function Btn({ children, onClick, variant = 'primary', full = false, size = 'md', disabled = false, icon, style, ariaLabel }) {
   const sizes = { sm: [10, 14, 12.5], md: [14, 18, 14], lg: [17, 22, 15.5] };
   const [py, px, fs] = sizes[size] || sizes.md;
   const base = {
@@ -147,7 +147,7 @@ function Btn({ children, onClick, variant = 'primary', full = false, size = 'md'
     danger:  { background: 'rgba(210,86,79,0.12)', color: 'var(--red)', borderColor: 'rgba(210,86,79,0.3)', '--np-edge': 'rgba(92,31,28,0.8)' },
   };
   return (
-    <button className={disabled ? 'tap' : 'np'} disabled={disabled} onClick={disabled ? undefined : onClick} style={{ ...base, ...variants[variant], ...style }}>
+    <button className={disabled ? 'tap' : 'np'} disabled={disabled} aria-label={ariaLabel} onClick={disabled ? undefined : onClick} style={{ ...base, ...variants[variant], ...style }}>
       {icon && <Icon name={icon} size={fs + 3} stroke={2.2} />}
       {children}
     </button>
