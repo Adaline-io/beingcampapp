@@ -4,10 +4,8 @@
   // static-assets Worker (no server code). "single-page-application" makes any
   // unknown path fall back to index.html so deep links like ?client=<token> work.
   //
-  // NOTE: "name" must match your Cloudflare project/Worker name exactly. If you
-  // named the project something other than "beingcamp" in the dashboard, change
-  // this value to match it.
-  "name": "beingcamp",
+  // NOTE: "name" must match your Cloudflare project/Worker name exactly.
+  "name": "beingcampapp",
   "compatibility_date": "2024-11-01",
   "assets": {
     "directory": "./dist",
