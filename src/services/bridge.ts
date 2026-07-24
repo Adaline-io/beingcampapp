@@ -33,6 +33,7 @@ interface UiProfile {
   bio: string;
   skills: string[];
   path: string;
+  category?: string | null;
   since?: string;
 }
 
@@ -103,6 +104,7 @@ type ProfileRow = {
   bio: string | null;
   skills: string[];
   path: string | null;
+  category: string | null;
   balance: number;
   activity_coins: number;
   created_at: string;
@@ -117,6 +119,7 @@ function rowToProfile(row: ProfileRow): UiProfile {
     bio: row.bio ?? '',
     skills: row.skills ?? [],
     path: row.path ?? 'maker',
+    category: row.category ?? null,
     since: sinceLabel(row.created_at),
   };
 }
@@ -384,7 +387,7 @@ export const backend = {
    *  2. device account: generated email+password kept in localStorage
    *     (needs "Confirm email" off; created once, signed back into after that)
    */
-  async signIn(profile: Partial<UiProfile>, startingBalance = 100): Promise<void> {
+  async signIn(profile: Partial<UiProfile>, _startingBalance = 100): Promise<void> {
     if (!isBackendEnabled) return;
     let userId = await currentUserId();
     if (!userId) {
@@ -430,8 +433,9 @@ export const backend = {
       bio: profile.bio ?? null,
       skills: profile.skills ?? [],
       path: profile.path ?? 'maker',
-      balance: startingBalance,
-      activity_coins: startingBalance,
+      category: profile.category ?? null,
+      // balance / activity_coins are NOT set here — they're locked columns
+      // (0018) and default to the initiation 100 server-side.
     });
     if (error) throw error;
   },
@@ -457,6 +461,7 @@ export const backend = {
     if (patch.bio !== undefined) row.bio = patch.bio;
     if (patch.skills !== undefined) row.skills = patch.skills;
     if (patch.path !== undefined) row.path = patch.path;
+    if (patch.category !== undefined) row.category = patch.category;
     if (Object.keys(row).length === 0) return;
     row.updated_at = new Date().toISOString();
     await data.updateMyProfile(userId, row);
@@ -767,13 +772,13 @@ export const backend = {
     if (error) throw error;
   },
 
-  /** Toggle a member's staff flag (admin profile-update RLS, 0008). */
+  /** Toggle a member's staff flag (admin_set_staff RPC, admin-gated in SQL). */
   async adminSetStaff(profileId: string, isStaff: boolean): Promise<void> {
     const { requireSupabase } = await import('../lib/supabase');
-    const { error } = await requireSupabase()
-      .from('profiles')
-      .update({ is_staff: isStaff })
-      .eq('id', profileId);
+    const { error } = await requireSupabase().rpc('admin_set_staff', {
+      p_profile: profileId,
+      p_is_staff: isStaff,
+    });
     if (error) throw error;
   },
 
@@ -881,10 +886,13 @@ export const backend = {
     if (error) throw error;
   },
 
-  /** Set a member's team role label (admin profile-update RLS). */
+  /** Set a member's team role label (admin_set_role RPC, admin-gated in SQL). */
   async adminSetRole(profileId: string, role: string | null): Promise<void> {
     const { requireSupabase } = await import('../lib/supabase');
-    const { error } = await requireSupabase().from('profiles').update({ team_role: role }).eq('id', profileId);
+    const { error } = await requireSupabase().rpc('admin_set_role', {
+      p_profile: profileId,
+      p_role: role ?? '',
+    });
     if (error) throw error;
   },
 
@@ -893,7 +901,27 @@ export const backend = {
     if (!isBackendEnabled) return false;
     let session = await auth.signInWithPassword(email, password).catch(() => null);
     if (!session) session = await auth.signUpWithPassword(email, password);
-    return Boolean(session);
+    if (!session) return false;
+    // Ensure a profile row exists so boot() hydrates admin/staff flags + wallet.
+    // A first-time email account has an auth user but no profile yet; create a
+    // minimal one (never overwrite an existing profile).
+    const userId = session.user?.id;
+    if (userId) {
+      const nameGuess = email
+        .split('@')[0]
+        .replace(/[._-]+/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase())
+        .trim();
+      const { requireSupabase } = await import('../lib/supabase');
+      await requireSupabase()
+        .from('profiles')
+        .upsert(
+          { id: userId, name: nameGuess || 'Team member', accent: '#c9a84c' },
+          { onConflict: 'id', ignoreDuplicates: true }
+        )
+        .then(() => undefined, () => undefined);
+    }
+    return true;
   },
 
   /** Email a reset link that lands back on this app. */
@@ -909,7 +937,7 @@ export const backend = {
     const { requireSupabase } = await import('../lib/supabase');
     const { data: rows, error } = await requireSupabase()
       .from('profiles')
-      .select('id, name, city, rank_index, balance, activity_coins, created_at, is_staff, team_role')
+      .select('id, name, city, headline, skills, rank_index, balance, activity_coins, created_at, is_staff, team_role')
       .order('created_at', { ascending: false })
       .limit(100);
     if (error) throw error;

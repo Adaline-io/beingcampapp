@@ -115,8 +115,10 @@ const SKILL_TO_INDUSTRY = {
 };
 
 function industriesForProfile(profile) {
-  const skills = (profile && profile.skills) || [];
   const out = new Set();
+  // The chosen category (agile discipline) leads — it's the member's home lane.
+  if (profile && profile.category) out.add(String(profile.category));
+  const skills = (profile && profile.skills) || [];
   for (const sk of skills) {
     const hit = SKILL_TO_INDUSTRY[String(sk).toLowerCase()];
     if (hit) out.add(hit);

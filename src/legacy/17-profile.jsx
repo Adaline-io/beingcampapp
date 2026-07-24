@@ -71,8 +71,10 @@ function ProfileScreen({ S }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontFamily: 'Bebas Neue, sans-serif', fontSize: 30, color: 'var(--text)', lineHeight: 1 }}>{S.user.name}</div>
           <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12.5, color: 'var(--muted)', marginTop: 4 }}>{S.profile.headline}{S.profile.city ? ` · ${S.profile.city}` : ''}</div>
-          <div style={{ display: 'flex', gap: 6, marginTop: 7 }}>
+          <div style={{ display: 'flex', gap: 6, marginTop: 7, flexWrap: 'wrap' }}>
             <Badge tone="gold">{rank.name}</Badge>
+            {S.profile.category && typeof industryOf !== 'undefined' && <Badge tone="blue">{industryOf(S.profile.category).name}</Badge>}
+            {S.teamRole && <Badge tone="purple">{S.teamRole}</Badge>}
             <Badge tone="grey">Member since {S.profile.since || "Jun '25"}</Badge>
           </div>
         </div>

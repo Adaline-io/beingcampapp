@@ -2,23 +2,14 @@ import { test, expect } from '@playwright/test';
 import { tap } from './helpers.mjs';
 
 /**
- * The full first-run journey a walk-in member takes:
- * Splash → phone number → OTP → path fork → profile setup → initiation → home.
+ * The full first-run journey a walk-in member takes — name-only sign-in:
+ * Splash → path fork → profile setup → initiation → home.
  */
 test('a new member can onboard end-to-end and lands on home', async ({ page }) => {
   await page.goto('/');
 
-  // Splash
+  // Splash → straight to the path fork (no phone / OTP — your name is enough).
   await tap(page.getByText('Enter the Camp'));
-
-  // Phone number via the in-app keypad
-  await expect(page.getByText(/Step 01/i)).toBeVisible();
-  for (const d of '9876543210') await tap(page.getByText(d, { exact: true }).first());
-  await tap(page.getByText('Send code'));
-
-  // OTP (demo accepts any 4 digits)
-  await expect(page.getByText(/Step 02/i)).toBeVisible();
-  for (const d of '1234') await tap(page.getByText(d, { exact: true }).first());
 
   // Path fork
   await expect(page.getByText(/WHAT BRINGS/i)).toBeVisible();
@@ -42,9 +33,6 @@ test('a new member can onboard end-to-end and lands on home', async ({ page }) =
 test('onboarding requires a name before continuing', async ({ page }) => {
   await page.goto('/');
   await tap(page.getByText('Enter the Camp'));
-  for (const d of '9876543210') await tap(page.getByText(d, { exact: true }).first());
-  await tap(page.getByText('Send code'));
-  for (const d of '1234') await tap(page.getByText(d, { exact: true }).first());
   await tap(page.getByText(/I.LL DO THE WORK/i).first());
 
   await expect(page.getByRole('button', { name: 'Continue' })).toBeDisabled();

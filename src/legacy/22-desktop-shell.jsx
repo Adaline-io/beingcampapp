@@ -537,7 +537,12 @@ function DesktopYou({ S }) {
             <div style={{ minWidth: 0 }}>
               <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums', fontSize: 23, color: 'var(--text)', lineHeight: 1 }}>{S.user.name}</div>
               <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13.5, color: 'var(--muted)', marginTop: 5 }}>{p.headline || 'Member of the Camp'}</div>
-              <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10.5, color: 'var(--dim)', marginTop: 5 }}>{p.city || 'BeingCamp'}{p.since ? ` · since ${p.since}` : ''}</div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                {p.category && typeof industryOf !== 'undefined' && <Badge tone="blue">{industryOf(p.category).name}</Badge>}
+                {S.teamRole && <Badge tone="purple">{S.teamRole}</Badge>}
+                <Badge tone="grey">{RANK_PERKS[S.rankIndex] ? RANK_PERKS[S.rankIndex].name : 'Member'}</Badge>
+              </div>
+              <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10.5, color: 'var(--dim)', marginTop: 8 }}>{p.city || 'BeingCamp'}{p.since ? ` · since ${p.since}` : ''}</div>
             </div>
           </div>
           {p.bio && <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.55, marginTop: 14 }}>{p.bio}</div>}
@@ -746,6 +751,7 @@ function DesktopAdmin({ S }) {
   const [metrics, setMetrics] = React.useState(null);
   const [audit, setAudit] = React.useState([]);
   const [busy, setBusy] = React.useState(false);
+  const [memberQ, setMemberQ] = React.useState('');
   const RANK_NAMES = RANK_PERKS.map((r) => r.name);
 
   const reload = React.useCallback(() => {
@@ -817,6 +823,40 @@ function DesktopAdmin({ S }) {
     catch (e) { S.toast({ msg: 'Staff change failed — apply migration 0008?', icon: 'wallet' }); console.warn(e); }
     setBusy(false);
   };
+  // Promote a member into the BeingCamp team (staff access + a team role), or
+  // manage/remove an existing team member — the super admin's core control.
+  const promote = async (m) => {
+    if (!m.is_staff) {
+      const suggested = (m.skills && m.skills[0]) ? `${m.skills[0]} Lead` : 'Team member';
+      const role = prompt(`Add ${m.name} to the BeingCamp team.\n\nTheir skills: ${(m.skills || []).join(', ') || '—'}\n\nGive them a team role:`, suggested);
+      if (role === null) return;
+      setBusy(true);
+      try {
+        await BE.adminSetStaff(m.id, true);
+        await BE.adminSetRole(m.id, role.trim() || 'Team member');
+        S.toast({ msg: `${m.name} joined the team · ${role.trim() || 'Team member'}`, icon: 'user' });
+        reload();
+      } catch (e) { S.toast({ msg: 'Could not add to team — migration 0008/0009?', icon: 'wallet' }); console.warn(e); }
+      setBusy(false);
+      return;
+    }
+    // Already staff: change role, or remove from team.
+    const choice = prompt(`${m.name} is on the team as “${m.team_role || 'Team member'}”.\n\nType a NEW role to change it, or type REMOVE to take them off the team:`, m.team_role || '');
+    if (choice === null) return;
+    setBusy(true);
+    try {
+      if (choice.trim().toUpperCase() === 'REMOVE') {
+        await BE.adminSetStaff(m.id, false);
+        await BE.adminSetRole(m.id, null);
+        S.toast({ msg: `${m.name} removed from the team` });
+      } else {
+        await BE.adminSetRole(m.id, choice.trim() || 'Team member');
+        S.toast({ msg: `${m.name} → ${choice.trim() || 'Team member'}` });
+      }
+      reload();
+    } catch (e) { S.toast({ msg: 'Update failed', icon: 'wallet' }); console.warn(e); }
+    setBusy(false);
+  };
   // Weekly digest as copyable text — paste into WhatsApp/email until the
   // outbound-email hookup lands (externals ship last, by design).
   const copyDigest = () => {
@@ -876,27 +916,37 @@ function DesktopAdmin({ S }) {
       )}
 
       <DeskSectionHead label={`Members${members ? ` · ${members.length}` : ''}`} action="Reload" onAction={reload} />
+      <div style={{ marginBottom: 10 }}>
+        <input value={memberQ} onChange={(e) => setMemberQ(e.target.value)} placeholder="Search members by name, skill, or craft — e.g. “editor”, “branding”…" aria-label="Search members"
+          style={{ width: '100%', background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 10, padding: '11px 14px', fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--text)', outline: 'none', boxSizing: 'border-box' }} />
+        <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 11.5, color: 'var(--dim)', marginTop: 6 }}>Pick members by their skill set and add them to the BeingCamp team — that unlocks the Board and staff tools for them.</div>
+      </div>
       <DeskCard style={{ padding: '4px 20px' }}>
         {!members && <div style={{ padding: '14px 0', fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--dim)' }}>Loading members…</div>}
         {members && members.length === 0 && <div style={{ padding: '14px 0', fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--dim)' }}>No members yet.</div>}
-        {(members || []).map((m, i, a) => (
-          <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: i < a.length - 1 ? '1px solid var(--line)' : 'none' }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>{m.name || 'Unnamed'}</div>
-              <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'var(--dim)', marginTop: 2 }}>{m.city || '—'} · joined {String(m.created_at).slice(0, 10)}</div>
+        {(members || []).filter((m) => {
+          const q = memberQ.trim().toLowerCase();
+          if (!q) return true;
+          return [m.name, m.headline, m.city, m.team_role, ...(m.skills || [])].join(' ').toLowerCase().includes(q);
+        }).map((m, i, a) => (
+          <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: i < a.length - 1 ? '1px solid var(--line)' : 'none', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 180 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>{m.name || 'Unnamed'}</span>
+                {m.is_staff && <Badge tone="blue">Team{m.team_role ? ` · ${m.team_role}` : ''}</Badge>}
+              </div>
+              <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{m.headline || m.city || '—'}</div>
+              {(m.skills || []).length > 0 && (
+                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 6 }}>
+                  {m.skills.slice(0, 6).map((sk) => <span key={sk} style={{ fontFamily: 'Space Mono, monospace', fontSize: 9, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--gold)', background: 'var(--gold-dim)', border: '1px solid var(--gold-line)', borderRadius: 999, padding: '2px 8px' }}>{sk}</span>)}
+                </div>
+              )}
             </div>
-            {m.is_staff && <Badge tone="blue">Staff</Badge>}
             <Badge tone="gold">{RANK_NAMES[m.rank_index] || 'Visitor'}</Badge>
             <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 12.5, color: 'var(--gold)', minWidth: 80, textAlign: 'right' }}>{fmt(m.balance)} BC</span>
             <Btn variant="outline" size="sm" onClick={() => grant(m)}>Grant</Btn>
             <Btn variant="ghost" size="sm" onClick={() => setRank(m)}>Rank</Btn>
-            <Btn variant="ghost" size="sm" onClick={() => toggleStaff(m)}>{m.is_staff ? 'Unstaff' : 'Staff'}</Btn>
-            <Btn variant="ghost" size="sm" onClick={async () => {
-              const role = prompt(`Team role for ${m.name} (blank to clear):`, m.team_role || '');
-              if (role === null) return;
-              try { await BE.adminSetRole(m.id, role.trim() || null); S.toast({ msg: role.trim() ? `${m.name} → ${role}` : `${m.name} role cleared` }); reload(); }
-              catch (e) { S.toast({ msg: 'Role change failed — migration 0009?', icon: 'wallet' }); console.warn(e); }
-            }}>Role</Btn>
+            <Btn variant={m.is_staff ? 'ghost' : 'primary'} size="sm" onClick={() => promote(m)}>{m.is_staff ? 'Manage team role' : 'Add to team'}</Btn>
           </div>
         ))}
       </DeskCard>
