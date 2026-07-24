@@ -58,6 +58,8 @@ interface UiOrder {
 
 interface BootState {
   isAdmin: boolean;
+  isStaff: boolean;
+  teamRole: string | null;
   profile: UiProfile | null;
   balance: number;
   activityCoins: number;
@@ -148,6 +150,8 @@ export const backend = {
 
       return {
         isAdmin: Boolean((profileRow as Record<string, unknown>).is_admin),
+        isStaff: Boolean((profileRow as Record<string, unknown>).is_staff),
+        teamRole: ((profileRow as Record<string, unknown>).team_role as string | null) ?? null,
         profile: rowToProfile(profileRow),
         balance: profileRow.balance,
         activityCoins: profileRow.activity_coins,
@@ -638,6 +642,60 @@ export const backend = {
     return rows ?? [];
   },
 
+  /* ------------------------------ Agile board ------------------------------ */
+
+  /** Sprint board: all tasks the caller may see (staff: all; member: own). */
+  async listTasks(): Promise<Array<Record<string, unknown>>> {
+    const { requireSupabase } = await import('../lib/supabase');
+    const { data: rows, error } = await requireSupabase()
+      .from('tasks')
+      .select('*, assignee:profiles!tasks_assignee_id_fkey(name)')
+      .order('priority')
+      .order('created_at');
+    if (error) throw error;
+    return rows ?? [];
+  },
+
+  async addTask(input: { title: string; sprint: string; points: number; assigneeId?: string | null }): Promise<void> {
+    const userId = await currentUserId();
+    const { requireSupabase } = await import('../lib/supabase');
+    const { error } = await requireSupabase().from('tasks').insert({
+      title: input.title,
+      sprint: input.sprint,
+      points: Math.max(1, Math.min(13, Math.round(input.points))),
+      assignee_id: input.assigneeId ?? null,
+      created_by: userId,
+    });
+    if (error) throw error;
+  },
+
+  async moveTask(taskId: string, status: string): Promise<void> {
+    const { requireSupabase } = await import('../lib/supabase');
+    const { error } = await requireSupabase().from('tasks').update({ status }).eq('id', taskId);
+    if (error) throw error;
+  },
+
+  async assignTask(taskId: string, assigneeId: string | null): Promise<void> {
+    const { requireSupabase } = await import('../lib/supabase');
+    const { error } = await requireSupabase().from('tasks').update({ assignee_id: assigneeId }).eq('id', taskId);
+    if (error) throw error;
+  },
+
+  /** Set a member's team role label (admin profile-update RLS). */
+  async adminSetRole(profileId: string, role: string | null): Promise<void> {
+    const { requireSupabase } = await import('../lib/supabase');
+    const { error } = await requireSupabase().from('profiles').update({ team_role: role }).eq('id', profileId);
+    if (error) throw error;
+  },
+
+  /** Team sign-in with email + password (needs "Confirm email" OFF for instant accounts). */
+  async teamSignIn(email: string, password: string): Promise<boolean> {
+    if (!isBackendEnabled) return false;
+    let session = await auth.signInWithPassword(email, password).catch(() => null);
+    if (!session) session = await auth.signUpWithPassword(email, password);
+    return Boolean(session);
+  },
+
   /* --------------------------------- Admin --------------------------------- */
 
   /** All members, newest first (profiles are public-read). */
@@ -645,7 +703,7 @@ export const backend = {
     const { requireSupabase } = await import('../lib/supabase');
     const { data: rows, error } = await requireSupabase()
       .from('profiles')
-      .select('id, name, city, rank_index, balance, activity_coins, created_at')
+      .select('id, name, city, rank_index, balance, activity_coins, created_at, is_staff, team_role')
       .order('created_at', { ascending: false })
       .limit(100);
     if (error) throw error;

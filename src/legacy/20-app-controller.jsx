@@ -35,6 +35,8 @@ function useBeingCamp(t) {
   const [profile, setProfile] = React.useState(saved.profile ?? (fresh ? null : DEFAULT_PROFILE));
   const [catalog, setCatalog] = React.useState(null); // live catalog from the DB (null → demo data)
   const [isAdmin, setIsAdmin] = React.useState(false); // founder/admin flag from the profile row
+  const [isStaff, setIsStaff] = React.useState(false);
+  const [teamRole, setTeamRole] = React.useState(null);
   const [joinedChallenges, setJoinedChallenges] = React.useState(saved.joinedChallenges ?? []);
   const [toastData, setToastData] = React.useState(null);
   const rankIndex = Math.max(0, Math.min(4, t.rankIndex ?? 1));
@@ -87,6 +89,8 @@ function useBeingCamp(t) {
         if (b.orders.length) setOrders(b.orders);
         if (b.projects) setWorkspaces(b.projects); // server truth for signed-in members
         setIsAdmin(!!b.isAdmin);
+        setIsStaff(!!b.isStaff);
+        setTeamRole(b.teamRole || null);
         setEntered(true);
       } else if (entered && profile) {
         // Entered locally but no server account (e.g. sign-ins were disabled
@@ -129,7 +133,7 @@ function useBeingCamp(t) {
     })(),
     myIndustries: (typeof industriesForProfile !== 'undefined') ? industriesForProfile(p) : [],
     leaders: (catalog && catalog.leaders && catalog.leaders.length ? catalog.leaders : null),
-    isAdmin,
+    isAdmin, isStaff, teamRole,
     joinedChallenges,
     challenges: (catalog && catalog.challenges && catalog.challenges.length ? catalog.challenges : (typeof CHALLENGES !== 'undefined' ? CHALLENGES : [])),
     joinChallenge: (c) => { setJoinedChallenges((p) => p.includes(c.id) ? p : [...p, c.id]); toast({ msg: `Joined · ${c.title}`, icon: 'trophy' }); if (BE && BE.syncJoinChallenge) mirror(BE.syncJoinChallenge(c.id)); },

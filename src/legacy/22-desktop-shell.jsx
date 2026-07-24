@@ -70,6 +70,9 @@ function DesktopSidebar({ S }) {
           onClick={() => S.setTab(n.id)} />
       ))}
 
+      {(S.isStaff || S.isAdmin) && (
+        <DeskNavBtn icon="check" label="The Board" active={activeSub === 'board'} onClick={() => goSub('board')} />
+      )}
       {S.isAdmin && (
         <DeskNavBtn icon="spark" label="Admin" active={activeSub === 'admin'} onClick={() => goSub('admin')} />
       )}
@@ -96,7 +99,7 @@ function DesktopSidebar({ S }) {
         <div style={{ width: 34, height: 34, borderRadius: 11, background: 'var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, fontSize: 13, color: '#1a1407', flexShrink: 0 }}>{S.user.initials}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 13, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{S.user.name}</div>
-          <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 9.5, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{RANK_PERKS[S.rankIndex].name}</div>
+          <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 9.5, color: S.teamRole ? 'var(--gold)' : 'var(--dim)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{S.teamRole || RANK_PERKS[S.rankIndex].name}</div>
         </div>
         <button className="tap" aria-label="Sign out" onClick={S.signOut} style={{ background: 'none', border: '1px solid var(--line)', borderRadius: 10, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
           <Icon name="arrowR" size={15} color="var(--dim)" />
@@ -841,6 +844,12 @@ function DesktopAdmin({ S }) {
             <Btn variant="outline" size="sm" onClick={() => grant(m)}>Grant</Btn>
             <Btn variant="ghost" size="sm" onClick={() => setRank(m)}>Rank</Btn>
             <Btn variant="ghost" size="sm" onClick={() => toggleStaff(m)}>{m.is_staff ? 'Unstaff' : 'Staff'}</Btn>
+            <Btn variant="ghost" size="sm" onClick={async () => {
+              const role = prompt(`Team role for ${m.name} (blank to clear):`, m.team_role || '');
+              if (role === null) return;
+              try { await BE.adminSetRole(m.id, role.trim() || null); S.toast({ msg: role.trim() ? `${m.name} → ${role}` : `${m.name} role cleared` }); reload(); }
+              catch (e) { S.toast({ msg: 'Role change failed — migration 0009?', icon: 'wallet' }); console.warn(e); }
+            }}>Role</Btn>
           </div>
         ))}
       </DeskCard>
@@ -904,6 +913,98 @@ function DesktopAdmin({ S }) {
   );
 }
 
+// ── The Board: agile sprint kanban for the internal team ────────────────
+const BOARD_COLS = [
+  ['backlog', 'Backlog'], ['todo', 'To do'], ['doing', 'Doing'], ['review', 'Review'], ['done', 'Done'],
+];
+const NEXT_STATUS = { backlog: 'todo', todo: 'doing', doing: 'review', review: 'done', done: 'backlog' };
+
+function DesktopBoard({ S }) {
+  const BE = typeof window !== 'undefined' ? window.BeingCampBackend : null;
+  const [tasks, setTasks] = React.useState(null);
+  const [members, setMembers] = React.useState([]);
+  const reload = React.useCallback(() => {
+    if (!BE || !BE.enabled) { setTasks([]); return; }
+    BE.listTasks().then(setTasks).catch((e) => { console.warn(e); setTasks([]); });
+    BE.adminListMembers().then(setMembers).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  React.useEffect(() => { reload(); }, [reload]);
+
+  const addTask = async () => {
+    const title = prompt('Task title:'); if (!title) return;
+    const sprint = prompt('Sprint:', 'S1') || 'S1';
+    const points = parseInt(prompt('Points (1–13):', '3') || '3', 10);
+    const who = prompt('Assign to (exact member name, blank = unassigned):') || '';
+    const m = members.find((x) => String(x.name).toLowerCase() === who.toLowerCase());
+    try { await BE.addTask({ title, sprint, points, assigneeId: m ? m.id : null }); S.toast({ msg: 'Task added' }); reload(); }
+    catch (e) { S.toast({ msg: 'Add failed — apply migration 0009?', icon: 'wallet' }); console.warn(e); }
+  };
+  const move = async (t) => {
+    try { await BE.moveTask(t.id, NEXT_STATUS[t.status] || 'todo'); reload(); }
+    catch (e) { S.toast({ msg: 'Move failed', icon: 'wallet' }); console.warn(e); }
+  };
+  const assign = async (t, e) => {
+    e.stopPropagation();
+    const who = prompt('Assign to (exact member name, blank = unassign):') || '';
+    const m = members.find((x) => String(x.name).toLowerCase() === who.toLowerCase());
+    try { await BE.assignTask(t.id, m ? m.id : null); reload(); }
+    catch (err) { S.toast({ msg: 'Assign failed', icon: 'wallet' }); console.warn(err); }
+  };
+
+  if (!S.isStaff && !S.isAdmin) {
+    return (
+      <DeskCard>
+        <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 15, color: 'var(--text)' }}>Team only</div>
+        <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>The Board is for internal team accounts. Ask the admin for staff access.</div>
+      </DeskCard>
+    );
+  }
+
+  const initials = (n) => String(n || '?').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  return (
+    <div style={{ animation: 'screenIn .3s ease' }}>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 18 }}>
+        <div>
+          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, letterSpacing: '-0.01em', fontSize: 25, color: 'var(--text)' }}>The Board</div>
+          <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>Sprint kanban — tap a card to advance it</div>
+        </div>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <Btn variant="ghost" onClick={reload}>Reload</Btn>
+          <Btn variant="primary" icon="plus" onClick={addTask}>Add task</Btn>
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(170px, 1fr))', gap: 12, overflowX: 'auto' }}>
+        {BOARD_COLS.map(([key, label]) => {
+          const col = (tasks || []).filter((t) => t.status === key);
+          return (
+            <div key={key} style={{ minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '0 4px 10px' }}>
+                <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: key === 'done' ? 'var(--green)' : 'var(--dim)' }}>{label}</span>
+                <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'var(--dim)' }}>{col.length}</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minHeight: 60 }}>
+                {tasks === null && <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12, color: 'var(--dim)', padding: 6 }}>Loading…</div>}
+                {col.map((t) => (
+                  <div key={t.id} className="npc" onClick={() => move(t)} style={{ background: 'var(--surface)', border: '1px solid var(--line)', borderLeft: `3px solid ${t.priority === 1 ? 'var(--red)' : t.priority === 3 ? 'var(--dim)' : 'var(--gold)'}`, borderRadius: 10, padding: '10px 12px' }}>
+                    <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 700, fontSize: 12.5, color: 'var(--text)', lineHeight: 1.35 }}>{t.title}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                      <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 9, color: 'var(--dim)' }}>{t.sprint} · {t.points}pt</span>
+                      <button className="tap" onClick={(e) => assign(t, e)} title="Assign" style={{ marginLeft: 'auto', width: 22, height: 22, borderRadius: 7, background: t.assignee ? 'var(--gold-dim)' : 'var(--panel)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, fontSize: 8.5, color: t.assignee ? 'var(--gold)' : 'var(--dim)' }}>
+                        {t.assignee ? initials(t.assignee.name) : '+'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Right rail: live context beside every non-home screen ──────────────
 function DesktopRail({ S }) {
   const notifs = (S.notifs || []).filter((n) => n.unread).slice(0, 3);
@@ -963,7 +1064,7 @@ function BeingCampDesktop({ t }) {
   // Tabs and key sub-screens get desktop-native wide views; everything else
   // falls back to the phone column + context rail.
   const wideTabs = { home: DesktopHome, showcase: DesktopShowcase, projects: DesktopProjects, profile: DesktopYou };
-  const wideSubs = { wallet: DesktopWallet, store: DesktopStore, programs: DesktopPrograms, leaders: DesktopLeaders, scan: DesktopZones, orders: DesktopOrders, notifications: DesktopNotifications, admin: DesktopAdmin, challenges: DesktopChallenges };
+  const wideSubs = { wallet: DesktopWallet, store: DesktopStore, programs: DesktopPrograms, leaders: DesktopLeaders, scan: DesktopZones, orders: DesktopOrders, notifications: DesktopNotifications, admin: DesktopAdmin, challenges: DesktopChallenges, board: DesktopBoard };
   const WideView = S.topScreen ? wideSubs[S.topScreen] : wideTabs[S.tab];
 
   return (

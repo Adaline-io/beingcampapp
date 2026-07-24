@@ -17,7 +17,7 @@ function Keypad({ onKey, onDel }) {
   );
 }
 
-function Splash({ onNext }) {
+function Splash({ onNext, onTeam }) {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: '0 28px 40px', position: 'relative', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', top: -80, right: -80, width: 320, height: 320, borderRadius: '50%', background: 'radial-gradient(circle, rgba(201,168,76,0.16), transparent 65%)', filter: 'blur(8px)' }} />
@@ -31,6 +31,11 @@ function Splash({ onNext }) {
       </div>
       <div style={{ position: 'relative' }}>
         <Btn variant="primary" size="lg" full icon="arrowR" onClick={onNext}>Enter the Camp</Btn>
+        {typeof window !== 'undefined' && window.BeingCampBackend && window.BeingCampBackend.enabled && (
+          <button className="tap" onClick={onTeam} style={{ width: '100%', marginTop: 12, background: 'none', border: '1px solid var(--line)', borderRadius: 10, padding: '11px 0', cursor: 'pointer', fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 600, fontSize: 12.5, color: 'var(--muted)' }}>
+            Team member? Sign in
+          </button>
+        )}
         <div style={{ textAlign: 'center', marginTop: 16, fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '0.1em', color: 'var(--dim)' }}>
           A subsidiary of ADALINE THE AGENCY
         </div>
@@ -316,12 +321,54 @@ function Onboarding({ onComplete }) {
   const [profile, setProfile] = React.useState(null);
   return (
     <div key={step} style={{ height: '100%', paddingTop: 38, animation: 'screenIn .4s ease' }}>
-      {step === 'splash' && <Splash onNext={() => setStep('phone')} />}
+      {step === 'splash' && <Splash onNext={() => setStep('phone')} onTeam={() => setStep('team')} />}
+      {step === 'team' && <TeamSignIn onBack={() => setStep('splash')} />}
       {step === 'phone' && <PhoneStep onNext={() => setStep('otp')} />}
       {step === 'otp' && <OtpStep onBack={() => setStep('phone')} onNext={() => setStep('fork')} />}
       {step === 'fork' && <ForkStep onPick={(r) => { setPath(r); setStep('setup'); }} />}
       {step === 'setup' && <ProfileSetup path={path} onDone={(prof) => { setProfile(prof); setStep('init'); }} />}
       {step === 'init' && <InitiationCamper path={path} onDone={() => onComplete(profile)} />}
+    </div>
+  );
+}
+
+// ── Team sign-in: email + password for internal agency accounts ─────────
+function TeamSignIn({ onBack }) {
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState(null);
+  const go = async () => {
+    if (!email.includes('@') || password.length < 8) { setErr('Enter a valid email and a password of 8+ characters.'); return; }
+    setBusy(true); setErr(null);
+    try {
+      const ok = await window.BeingCampBackend.teamSignIn(email.trim(), password);
+      if (ok) {
+        try { localStorage.setItem('beingcamp_v3', JSON.stringify({ entered: true })); } catch (e) {}
+        location.reload(); // boot hydrates the account from the server
+      } else {
+        setErr('Sign-in needs email confirmation disabled — ask the admin.');
+      }
+    } catch (e) {
+      setErr(String((e && e.message) || 'Sign-in failed'));
+    }
+    setBusy(false);
+  };
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: '70px 26px 30px', animation: 'screenIn .3s ease' }}>
+      <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--gold)' }}>Internal · Adaline / BeingCamp</div>
+      <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontWeight: 800, fontSize: 30, letterSpacing: '-0.01em', color: 'var(--text)', margin: '10px 0 6px' }}>Team sign-in</div>
+      <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 13, color: 'var(--muted)', marginBottom: 24, lineHeight: 1.5 }}>One account, every device. New email creates your team account instantly.</div>
+      <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 6 }}>Email</div>
+      <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="email" placeholder="you@adaline.in"
+        style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 10, padding: '13px 14px', color: 'var(--text)', fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 14.5, outline: 'none', marginBottom: 14 }} />
+      <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 6 }}>Password</div>
+      <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" autoComplete="current-password" placeholder="8+ characters"
+        style={{ width: '100%', background: 'var(--surface)', border: '1px solid var(--line2)', borderRadius: 10, padding: '13px 14px', color: 'var(--text)', fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 14.5, outline: 'none', marginBottom: 10 }} />
+      {err && <div style={{ fontFamily: 'Hanken Grotesk, sans-serif', fontSize: 12.5, color: 'var(--red)', marginBottom: 10, lineHeight: 1.4 }}>{err}</div>}
+      <div style={{ flex: 1 }} />
+      <Btn variant="primary" size="lg" full icon="arrowR" disabled={busy} onClick={go}>{busy ? 'Signing in…' : 'Sign in'}</Btn>
+      <div style={{ marginTop: 10 }}><Btn variant="ghost" full onClick={onBack}>Back</Btn></div>
     </div>
   );
 }
